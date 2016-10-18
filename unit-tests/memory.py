@@ -40,14 +40,14 @@ class DNCMemoryTests(unittest.TestCase):
                 mem = Memory(4, 5, 2)
                 keys = np.array([[0., 1., 0., 0.3, 4.3], [1.3, 0.8, 0., 0., 0.62]]).astype(np.float32)
                 strengths = np.array([0.7, 0.2]).astype(np.float32)
+                predicted_weights = np.array([[0.25, 0.25, 0.25, 0.25], [0.25, 0.25, 0.25, 0.25]]).astype(np.float32)
 
                 op = mem.get_lookup_weighting(keys, strengths)
-                _, c = session.run([
-                    tf.initialize_all_variables(),
-                    op
-                ])
-                print c
-                self.assertTrue(True)
+                session.run(tf.initialize_all_variables())
+                c = session.run(op)
+
+                self.assertTrue(c.shape, (2, 4))
+                self.assertTrue(np.array_equal(c, predicted_weights))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

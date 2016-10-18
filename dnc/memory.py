@@ -60,7 +60,7 @@ class Memory:
 
         similiarity = tf.matmul(normalized_keys, normalized_memory, transpose_b=True)
 
-        return tf.nn.softmax(tf.mul(tf.transpose(similiarity), strengths))
+        return tf.nn.softmax(tf.transpose(tf.transpose(similiarity) * strengths))
 
 
     def update_usage_vector(self, free_gates):
