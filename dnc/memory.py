@@ -156,6 +156,8 @@ class Memory:
             the updated memory matrix
         """
 
+        # transform vectors to 2D arrays with the last dimension being 1
+        # to be able to carry out the matmuls as outer products
         write_weighting = tf.reshape(write_weighting, [-1, 1])
         write_vector = tf.reshape(write_vector, [-1, 1])
         erase_vector = tf.reshape(erase_vector, [-1, 1])
@@ -165,3 +167,23 @@ class Memory:
         updated_memory = self.memory_matrix.assign(erasing + writing)
 
         return updated_memory
+
+
+    def update_precedence_vector(self, write_weighting):
+        """
+        updates the precedence vector given the latest write weighting
+
+        Parameters:
+        ----------
+        write_weighting: Tensor (words_num, )
+            the latest write weighting for the memory
+
+        Returns: Tensor (words_num, )
+            the updated precedence vector
+        """
+
+        reset_factor = 1 - tf.reduce_sum(write_weighting)
+        updated_precedence_vector = reset_factor * self.precedence_vector + write_weighting
+        updated_precedence_vector = self.precedence_vector.assign(updated_precedence_vector)
+
+        return updated_precedence_vector

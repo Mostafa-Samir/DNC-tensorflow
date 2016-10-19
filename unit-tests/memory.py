@@ -134,5 +134,23 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(np.allclose(M, predicted))
                 self.assertTrue(np.allclose(updated_memory, predicted))
 
+    def test_update_precedence_vector(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                write_weighting = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
+                predicted = write_weighting
+
+                op = mem.update_precedence_vector(write_weighting)
+                session.run(tf.initialize_all_variables())
+                p = session.run(op)
+                updated_precedence_vector = session.run(mem.precedence_vector.value())
+
+                self.assertEqual(p.shape, (4, ))
+                self.assertTrue(np.allclose(p, predicted))
+                self.assertTrue(np.allclose(updated_precedence_vector, predicted))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
