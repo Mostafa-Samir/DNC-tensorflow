@@ -49,5 +49,30 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(c.shape, (2, 4))
                 self.assertTrue(np.array_equal(c, predicted_weights))
 
+
+    def test_update_usage_vector(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                free_gates = np.array([0.2, 0.67]).astype(np.float32)
+                predicted_usage = np.array([0.49429685,  0.49429685,  0.49429685,  0.49429685]).astype(np.float32)
+
+                changes = [
+                    mem.read_weightings.assign(tf.fill([2, 4], 0.25)),
+                    mem.write_weighting.assign(tf.fill([4, ], 0.25)),
+                    mem.usage_vector.assign(tf.fill([4, ], 0.5))
+                ]
+                op = mem.update_usage_vector(free_gates)
+                session.run(tf.initialize_all_variables())
+                session.run(changes)
+                u = session.run(op)
+                updated_usage = session.run(mem.usage_vector.value())
+
+                self.assertEqual(u.shape, (4, ))
+                self.assertTrue(np.array_equal(u, predicted_usage))
+                self.assertTrue(np.array_equal(updated_usage, predicted_usage))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
