@@ -156,6 +156,10 @@ class Memory:
             the updated memory matrix
         """
 
+        write_weighting = tf.reshape(write_weighting, [-1, 1])
+        write_vector = tf.reshape(write_vector, [-1, 1])
+        erase_vector = tf.reshape(erase_vector, [-1, 1])
+
         erasing = self.memory_matrix * (self.E - tf.matmul(write_weighting, erase_vector, transpose_b=True))
         writing = tf.matmul(write_weighting, write_vector, transpose_b=True)
         updated_memory = self.memory_matrix.assign(erasing + writing)

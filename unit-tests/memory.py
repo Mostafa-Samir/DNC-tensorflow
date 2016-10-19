@@ -92,5 +92,47 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertEqual(a.shape, (4, ))
                 self.assertTrue(np.allclose(a, predicted_weights))
 
+
+    def test_updated_write_weighting(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                write_gate, allocation_gate = 0.65, 0.2
+                lookup_weighting = np.array([[0.25, 0.25, 0.25, 0.25]]).astype(np.float32)
+                allocation_weighting = np.array([0., 0.024, 0.8, 0.12]).astype(np.float32)
+                predicted_weights = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
+
+                op = mem.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
+                session.run(tf.initialize_all_variables())
+                w_w = session.run(op)
+                updated_write_weighting = session.run(mem.write_weighting.value())
+
+                self.assertEqual(w_w.shape, (4, ))
+                self.assertTrue(np.allclose(w_w, predicted_weights))
+                self.assertTrue(np.allclose(updated_write_weighting, predicted_weights))
+
+
+    def test_update_memory(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                write_weighting = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
+                write_vector = np.array([1.8, 3.548, 4.2, 0.269, 0.001]).astype(np.float32)
+                erase_vector = np.zeros(5).astype(np.float32)
+                predicted = np.outer(write_weighting, write_vector)
+
+                op = mem.update_memory(write_weighting, write_vector, erase_vector)
+                session.run(tf.initialize_all_variables())
+                M = session.run(op)
+                updated_memory = session.run(mem.memory_matrix.value())
+
+                self.assertEqual(M.shape, (4, 5))
+                self.assertTrue(np.allclose(M, predicted))
+                self.assertTrue(np.allclose(updated_memory, predicted))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
