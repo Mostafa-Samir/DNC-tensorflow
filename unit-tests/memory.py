@@ -74,5 +74,23 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(np.array_equal(u, predicted_usage))
                 self.assertTrue(np.array_equal(updated_usage, predicted_usage))
 
+
+    def test_get_allocation_weighting(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                sorted_usage = np.array([0.2, 0.4, 0.7, 1]).astype(np.float32)
+                free_list = np.array([2, 3, 1, 0]).astype(np.int32)
+                predicted_weights = np.array([0., 0.024, 0.8, 0.12]).astype(np.float32)
+
+                op = mem.get_allocation_weighting(sorted_usage, free_list)
+                session.run(tf.initialize_all_variables())
+                a = session.run(op)
+
+                self.assertEqual(a.shape, (4, ))
+                self.assertTrue(np.allclose(a, predicted_weights))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

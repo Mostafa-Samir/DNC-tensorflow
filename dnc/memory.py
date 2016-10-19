@@ -38,6 +38,10 @@ class Memory:
             # a constant array of ones to be used in writing
             self.E = tf.ones([words_num, word_size])
 
+            # a variable used to bring the allocation weighting in order of memory words
+            # after computing them using the sorted usage and free list
+            self.ordered_allocation_weighting = tf.Variable(tf.zeros([words_num, ]), trainable=False)
+
 
 
     def get_lookup_weighting(self, keys, strengths):
@@ -82,21 +86,25 @@ class Memory:
         return updated_usage
 
 
-    def get_allocation_weighting(self, free_list):
+    def get_allocation_weighting(self, sorted_usage, free_list):
         """
         retreives the writing allocation weighting based on the usage free list
 
         Parameters:
         ----------
-        free_list: Tensor (words_num, )
+        sorted_usage: Tensor (words_num, )
             the usage vector sorted ascndingly
+        free_list: Tensor (words_num, )
+            the original indecies of the sorted usage vector
 
         Returns: Tensor (words_num, )
             the allocation weighting for each word in memory
         """
 
-        shifted_cumprod = tf.cumprod(free_list) / free_list
-        allocation_weighting = (1 - free_list) * shifted_cumprod
+        shifted_cumprod = tf.cumprod(sorted_usage, exclusive=True)
+        unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
+
+        allocation_weighting = tf.scatter_update(self.ordered_allocation_weighting, free_list, unordered_allocation_weighting)
 
         return allocation_weighting
 
