@@ -1,4 +1,6 @@
 import tensorflow as tf
+import numpy as np
+import utility
 
 class Memory:
 
@@ -37,6 +39,9 @@ class Memory:
 
             # a constant array of ones to be used in writing
             self.E = tf.ones([words_num, word_size])
+
+            # a words_num x words_num identity matrix
+            self.I = tf.constant(np.identity(words_num, dtype=np.float32))
 
             # a variable used to bring the allocation weighting in order of memory words
             # after computing them using the sorted usage and free list
@@ -187,3 +192,27 @@ class Memory:
         updated_precedence_vector = self.precedence_vector.assign(updated_precedence_vector)
 
         return updated_precedence_vector
+
+
+    def update_link_matrix(self, write_weighting):
+        """
+        updates and returns the temporal link matrix gievn for the latest write
+
+        Parameters:
+        ----------
+        write_weighting: Tensor (words_num, )
+            the latest write_weighting for the memorye
+
+        Returns: Tensor (words_num, words_num)
+            the updated temporal link matrix
+        """
+
+        write_weighting = tf.reshape(write_weighting, [-1, 1])
+        precedence_vector = tf.reshape(self.precedence_vector, [-1, 1])
+
+        reset_factor = 1 - utility.pairwise_add(write_weighting)
+        updated_link_matrix = reset_factor * self.link_matrix + tf.matmul(write_weighting, precedence_vector, transpose_b=True)
+        updated_link_matrix = (1 - self.I) * updated_link_matrix  # eliminates self-links
+        updated_link_matrix = self.link_matrix.assign(updated_link_matrix)
+
+        return updated_link_matrix

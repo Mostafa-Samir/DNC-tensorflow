@@ -152,5 +152,42 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(np.allclose(p, predicted))
                 self.assertTrue(np.allclose(updated_precedence_vector, predicted))
 
+
+    def test_update_link_matrix(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                _write_weighting = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
+                _precedence_vector = np.array([0.17644639, 0.18068111, 0.31760353, 0.19761997]).astype(np.float32)
+                initial_link = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
+                np.fill_diagonal(initial_link, 0)
+
+                # calculate the updated link iteratively as in paper
+                # to check the correcteness of the vectorized implementation
+                predicted = np.zeros((4,4), dtype=np.float32)
+                for i in range(4):
+                    for j in range(4):
+                        if i != j:
+                            reset_factor = (1 - _write_weighting[i] - _write_weighting[j])
+                            predicted[i, j]  = reset_factor * initial_link[i , j] + _write_weighting[i] * _precedence_vector[j]
+
+                changes = [
+                    mem.link_matrix.assign(initial_link),
+                    mem.precedence_vector.assign(_precedence_vector)
+                ]
+
+                write_weighting = tf.constant(_write_weighting)
+
+                op = mem.update_link_matrix(write_weighting)
+                session.run(tf.initialize_all_variables())
+                session.run(changes)
+                L = session.run(op)
+                updated_link_matrix = session.run(mem.link_matrix.value())
+
+                self.assertTrue(np.allclose(L, predicted))
+                self.assertTrue(np.allclose(updated_link_matrix, predicted))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
