@@ -283,3 +283,73 @@ class Memory:
         updated_read_vectors = self.read_vectors.assign(updated_read_vectors)
 
         return updated_read_vectors
+
+
+    def write(self, key, strength, free_gates, allocation_gate, write_gate, write_vector, erase_vector):
+        """
+        defines the complete pipeline of writing to memory gievn the write variables
+
+        Parameters:
+        ----------
+        key: Tensor (word_size, )
+            the key to query the memory location with
+        strength: (1, )
+            the strength of the query key
+        free_gates: Tensor (read_heads,)
+            the degree to which location at read haeds will be freed
+        allocation_gate: Scalar
+            the fraction of writing that is being allocated in a new locatio
+        write_gate: Scalar
+            the amount of information to be written to memory
+        write_vector: Tensor (word_size, )
+            specifications of what to write to memory
+        erase_vector: Tensor(word_size, )
+            specifications of what to erase from memory
+
+        Returns : Tuple
+            the updated memory_matrix: Tensor (words_num, words_size)
+            the updated link matrix: Tensor(words_num, words_num)
+        """
+
+        lookup_weighting = self.get_lookup_weighting(key, strength)
+        usage_vector = self.update_usage_vector(free_gates)
+
+        sorted_usage, free_list = tf.nn.top_k(-1 * usage_vector, self.words_num)
+        sorted_usage = -1 * sorted_usage
+
+        allocation_weighting = self.get_allocation_weighting(sorted_usage, free_list)
+        write_weighting = self.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
+        memory_matrix = self.update_memory(write_weighting, write_vector, erase_vector)
+        link_matrix = self.update_link_matrix(write_weighting)
+        self.update_precedence_vector(write_weighting)
+
+        return memory_matrix, link_matrix
+
+
+    def read(self, keys, strengths, link_matrix, read_modes, memory_matrix):
+        """
+        defines the complete pipeline for reading from memory
+
+        Parameters:
+        ----------
+        keys: Tensor (read_heads, word_size)
+            the kyes to query the memory locations with
+        strengths: Tensor (read_heads, )
+            the strength of each read key
+        link_matrix: Tensor (words_num, words_num)
+            the updated link matrix from the last writing
+        read_modes: Tensor (read_heads, 3)
+            the softmax distribution between the three read modes
+        memory_matrix: Tensor (words_num, word_size)
+            the updated memory matrix from the last writing
+
+        Returns: Tensor (read_heads, word_size)
+            the recently read vectors
+        """
+
+        lookup_weighting = self.get_lookup_weighting(keys, strengths)
+        forward_weighting, backward_weighting = self.get_directional_weightings(link_matrix)
+        read_weightings = self.update_read_weightings(lookup_weighting, forward_weighting, backward_weighting, read_modes)
+        read_vectors = self.update_read_vectors(memory_matrix, read_weightings)
+
+        return read_vectors

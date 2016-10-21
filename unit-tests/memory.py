@@ -260,6 +260,45 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(np.allclose(r, predicted))
                 self.assertTrue(np.allclose(updated_read_vectors, predicted))
 
+    def test_write(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph = graph) as session:
+
+                mem = Memory(4, 5, 2)
+                key = np.array([[0., 1., 0., 0.3, 4.3]]).astype(np.float32)
+                strength = np.array([0.7]).astype(np.float32)
+                free_gates = np.array([0.2, 0.67]).astype(np.float32)
+                write_gate, allocation_gate = 0.65, 0.2
+                write_vector = np.array([1.8, 3.548, 4.2, 0.269, 0.001]).astype(np.float32)
+                erase_vector = np.zeros(5).astype(np.float32)
+
+                M_op, L_op = mem.write(key, strength, free_gates, allocation_gate, write_gate , write_vector, erase_vector)
+                session.run(tf.initialize_all_variables())
+                M, L = session.run([M_op, L_op])
+
+                self.assertEqual(M.shape, (4, 5))
+                self.assertEqual(L.shape, (4, 4))
+
+
+
+    def test_read(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph = graph) as session:
+                mem = Memory(4, 5, 2)
+                keys = np.array([[0., 1., 0., 0.3, 4.3], [1.3, 0.8, 0., 0., 0.62]]).astype(np.float32)
+                strengths = np.array([0.7, 0.2]).astype(np.float32)
+                link_matrix = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
+                read_modes = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32)
+                memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
+
+                op = mem.read(keys, strengths, link_matrix, read_modes, memory_matrix)
+                session.run(tf.initialize_all_variables())
+                r = session.run(op)
+                
+                self.assertEqual(r.shape, (2, 5))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
