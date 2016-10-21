@@ -189,5 +189,30 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(np.allclose(L, predicted))
                 self.assertTrue(np.allclose(updated_link_matrix, predicted))
 
+
+    def test_get_directional_weightings(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                _link_matrix = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
+                _read_weightings = np.full((2, 4), 0.25)
+                predicted_forward = np.dot(_read_weightings, _link_matrix)
+                predicted_backward = np.dot(_read_weightings, _link_matrix.T)
+
+                changes = [
+                    mem.read_weightings.assign(_read_weightings)
+                ]
+
+                fop, bop = mem.get_directional_weightings(_link_matrix)
+
+                session.run(tf.initialize_all_variables())
+                session.run(changes)
+                forward_weighting, backward_weighting = session.run([fop, bop])
+
+                self.assertTrue(np.allclose(forward_weighting, predicted_forward))
+                self.assertTrue(np.allclose(backward_weighting, predicted_backward))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -216,3 +216,23 @@ class Memory:
         updated_link_matrix = self.link_matrix.assign(updated_link_matrix)
 
         return updated_link_matrix
+
+
+    def get_directional_weightings(self, link_matrix):
+        """
+        computes and returns the forward and backward reading weightings
+
+        Parameters:
+        ----------
+        link_matrix: Tensor (words_num, words_num)
+            the temporal link matrix
+
+        Returns: Tuple
+            forward weighting: Tensor (read_heads, words_num),
+            backward weighting: Tensor (read_heads, words_num)
+        """
+
+        forward_weighting = tf.matmul(self.read_weightings, link_matrix)
+        backward_weighting = tf.matmul(self.read_weightings, link_matrix, transpose_b=True)
+
+        return forward_weighting, backward_weighting
