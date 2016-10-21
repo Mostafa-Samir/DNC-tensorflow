@@ -214,5 +214,32 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(np.allclose(forward_weighting, predicted_forward))
                 self.assertTrue(np.allclose(backward_weighting, predicted_backward))
 
+
+
+    def test_update_read_weightings(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+
+                mem = Memory(4, 5, 2)
+                lookup_weightings = np.full((2, 4), 0.25).astype(np.float32)
+                forward_weighting = np.array([[0.5, 0.23, 0.14, 0.062], [0.062, 0.23, 0.5, 0.14]]).astype(np.float32)
+                backward_weighting = np.array([[0.01, 0.15, 0.068, 0.62], [0.62, 0.15, 0.01, 0.62]]).astype(np.float32)
+                read_mode = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32)
+                predicted_weights = np.zeros((2, 4)).astype(np.float32)
+
+                # calculate the predicted weights using iterative method from paper
+                # to check the correcteness of the vectorized implementation
+                for i in range(2):
+                    predicted_weights[i] = read_mode[i,0] * backward_weighting[i] + read_mode[i, 1] * lookup_weightings[i] + read_mode[i, 2] * forward_weighting[i]
+
+                op = mem.update_read_weightings(lookup_weightings, forward_weighting, backward_weighting, read_mode)
+                session.run(tf.initialize_all_variables())
+                w_r = session.run(op)
+                updated_read_weightings = session.run(mem.read_weightings.value())
+
+                self.assertTrue(np.allclose(w_r, predicted_weights))
+                self.assertTrue(np.allclose(updated_read_weightings, predicted_weights))
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

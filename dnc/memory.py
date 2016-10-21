@@ -236,3 +236,30 @@ class Memory:
         backward_weighting = tf.matmul(self.read_weightings, link_matrix, transpose_b=True)
 
         return forward_weighting, backward_weighting
+
+
+    def update_read_weightings(self, lookup_weightings, forward_weighting, backward_weighting, read_mode):
+        """
+        updates and returns the current read_weightings
+
+        Parameters:
+        ----------
+        lookup_weightings: Tensor (read_heads, words_num)
+            the content-based read weighting
+        forward_weighting: Tensor (read_heads, words_num)
+            the forward direction read weighting
+        backward_weighting: Tensor (read_heads, words_num)
+            the backward direction read weighting
+        read_mode: Tesnor (read_heads, 3)
+            the softmax distribution between the three read modes
+
+        Returns: Tensor (read_heads, words_num)
+        """
+
+        backward_mode = tf.expand_dims(read_mode[:, 0], 1) * backward_weighting
+        lookup_mode = tf.expand_dims(read_mode[:, 1], 1) * lookup_weightings
+        forward_mode = tf.expand_dims(read_mode[:, 2], 1) * forward_weighting
+
+        updated_read_weightings = self.read_weightings.assign(backward_mode + lookup_mode + forward_mode)
+
+        return updated_read_weightings
