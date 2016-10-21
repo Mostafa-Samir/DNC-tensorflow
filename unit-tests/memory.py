@@ -241,5 +241,25 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(np.allclose(w_r, predicted_weights))
                 self.assertTrue(np.allclose(updated_read_weightings, predicted_weights))
 
+
+    def test_update_read_vectors(self):
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph = graph) as session:
+
+                mem = Memory(4, 5, 2)
+                memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
+                read_weightings = np.array([[0.07, 0.36, 0.51, 0.06], [0.51, 0.07, 0.06, 0.36]]).astype(np.float32)
+                predicted = np.dot(read_weightings, memory_matrix)
+
+                op = mem.update_read_vectors(memory_matrix, read_weightings)
+                session.run(tf.initialize_all_variables())
+                r = session.run(op)
+                updated_read_vectors = session.run(mem.read_vectors.value())
+
+                self.assertTrue(np.allclose(r, predicted))
+                self.assertTrue(np.allclose(updated_read_vectors, predicted))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

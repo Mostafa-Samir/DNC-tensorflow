@@ -263,3 +263,23 @@ class Memory:
         updated_read_weightings = self.read_weightings.assign(backward_mode + lookup_mode + forward_mode)
 
         return updated_read_weightings
+
+
+    def update_read_vectors(self, memory_matrix, read_weightings):
+        """
+        reads, updates, and returns the read vectors of the recently updated memory
+
+        Parameters:
+        ----------
+        memory_matrix: Tensor (words_num, word_size)
+            the recently updated memory matrix
+        read_weightings: Tensor (read_heads, words_num)
+            the amount of info to read from each memory location by each read head
+
+        Returns: Tensor (read_heads, word_size)
+        """
+
+        updated_read_vectors = tf.matmul(read_weightings, memory_matrix)
+        updated_read_vectors = self.read_vectors.assign(updated_read_vectors)
+
+        return updated_read_vectors
