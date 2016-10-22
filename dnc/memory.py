@@ -33,9 +33,9 @@ class Memory:
             self.link_matrix = tf.Variable(tf.zeros([words_num, words_num]), name='link_matrix', trainable=False)
 
             self.write_weighting = tf.Variable(tf.zeros([words_num, ]), name='write_weighting', trainable=False)
-            self.read_weightings = tf.Variable(tf.zeros([read_heads, words_num]), name='read_weightings', trainable=False)
+            self.read_weightings = tf.Variable(tf.zeros([words_num, read_heads]), name='read_weightings', trainable=False)
 
-            self.read_vectors = tf.Variable(tf.zeros([read_heads, word_size]), name='read_vectors', trainable=False)
+            self.read_vectors = tf.Variable(tf.zeros([word_size, read_heads]), name='read_vectors', trainable=False)
 
             # a constant array of ones to be used in writing
             self.E = tf.ones([words_num, word_size])
@@ -55,21 +55,21 @@ class Memory:
 
         Parameters:
         ----------
-        keys: Tensor (number_of_keys, word_size)
+        keys: Tensor (word_size, number_of_keys)
             the keys to query the memory with
         strengths: Tensor (number_of_keys, )
             the list of strengths for each lookup key
 
-        Returns: Tensor (number_of_keys, words_num)
+        Returns: Tensor (words_num, number_of_keys)
             The list of lookup weightings for each provided key
         """
 
         normalized_memory = tf.nn.l2_normalize(self.memory_matrix, 1)
         normalized_keys = tf.nn.l2_normalize(keys, 1)
 
-        similiarity = tf.matmul(normalized_keys, normalized_memory, transpose_b=True)
+        similiarity = tf.matmul(normalized_memory, normalized_keys)
 
-        return tf.nn.softmax(tf.transpose(tf.transpose(similiarity) * strengths))
+        return tf.nn.softmax(similiarity * strengths, 0)
 
 
     def update_usage_vector(self, free_gates):
@@ -84,7 +84,7 @@ class Memory:
             the updated usage vector
         """
 
-        retention_vector = tf.reduce_prod(1 - tf.transpose(self.read_weightings) * free_gates, 1)
+        retention_vector = tf.reduce_prod(1 - self.read_weightings * free_gates, 1)
         updated_usage = (self.usage_vector + self.write_weighting - self.usage_vector * self.write_weighting)  * retention_vector
         updated_usage = self.usage_vector.assign(updated_usage)
 
@@ -228,12 +228,12 @@ class Memory:
             the temporal link matrix
 
         Returns: Tuple
-            forward weighting: Tensor (read_heads, words_num),
-            backward weighting: Tensor (read_heads, words_num)
+            forward weighting: Tensor (words_num, read_heads),
+            backward weighting: Tensor (words_num, read_heads)
         """
 
-        forward_weighting = tf.matmul(self.read_weightings, link_matrix)
-        backward_weighting = tf.matmul(self.read_weightings, link_matrix, transpose_b=True)
+        forward_weighting = tf.matmul(link_matrix, self.read_weightings)
+        backward_weighting = tf.matmul(link_matrix, self.read_weightings, transpose_a=True)
 
         return forward_weighting, backward_weighting
 
@@ -244,21 +244,21 @@ class Memory:
 
         Parameters:
         ----------
-        lookup_weightings: Tensor (read_heads, words_num)
+        lookup_weightings: Tensor (words_num, read_heads)
             the content-based read weighting
-        forward_weighting: Tensor (read_heads, words_num)
+        forward_weighting: Tensor (words_num, read_heads)
             the forward direction read weighting
-        backward_weighting: Tensor (read_heads, words_num)
+        backward_weighting: Tensor (words_num, read_heads)
             the backward direction read weighting
-        read_mode: Tesnor (read_heads, 3)
+        read_mode: Tesnor (3, read_heads)
             the softmax distribution between the three read modes
 
-        Returns: Tensor (read_heads, words_num)
+        Returns: Tensor (words_num, read_heads)
         """
 
-        backward_mode = tf.expand_dims(read_mode[:, 0], 1) * backward_weighting
-        lookup_mode = tf.expand_dims(read_mode[:, 1], 1) * lookup_weightings
-        forward_mode = tf.expand_dims(read_mode[:, 2], 1) * forward_weighting
+        backward_mode = read_mode[0, :] * backward_weighting
+        lookup_mode = read_mode[1, :] * lookup_weightings
+        forward_mode = read_mode[2, :] * forward_weighting
 
         updated_read_weightings = self.read_weightings.assign(backward_mode + lookup_mode + forward_mode)
 
@@ -273,13 +273,13 @@ class Memory:
         ----------
         memory_matrix: Tensor (words_num, word_size)
             the recently updated memory matrix
-        read_weightings: Tensor (read_heads, words_num)
+        read_weightings: Tensor (words_num, read_heads)
             the amount of info to read from each memory location by each read head
 
-        Returns: Tensor (read_heads, word_size)
+        Returns: Tensor (word_size, read_heads)
         """
 
-        updated_read_vectors = tf.matmul(read_weightings, memory_matrix)
+        updated_read_vectors = tf.matmul(memory_matrix, read_weightings, transpose_a=True)
         updated_read_vectors = self.read_vectors.assign(updated_read_vectors)
 
         return updated_read_vectors
@@ -332,18 +332,18 @@ class Memory:
 
         Parameters:
         ----------
-        keys: Tensor (read_heads, word_size)
+        keys: Tensor (word_size, read_heads)
             the kyes to query the memory locations with
         strengths: Tensor (read_heads, )
             the strength of each read key
         link_matrix: Tensor (words_num, words_num)
             the updated link matrix from the last writing
-        read_modes: Tensor (read_heads, 3)
+        read_modes: Tensor (3, read_heads)
             the softmax distribution between the three read modes
         memory_matrix: Tensor (words_num, word_size)
             the updated memory matrix from the last writing
 
-        Returns: Tensor (read_heads, word_size)
+        Returns: Tensor (word_size, read_heads)
             the recently read vectors
         """
 

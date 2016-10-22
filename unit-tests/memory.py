@@ -27,9 +27,9 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertTrue(isinstance(mem.write_weighting, tf.Variable))
                 self.assertEqual(mem.write_weighting.get_shape().as_list(), [4])
                 self.assertTrue(isinstance(mem.read_weightings, tf.Variable))
-                self.assertEqual(mem.read_weightings.get_shape().as_list(), [2, 4])
+                self.assertEqual(mem.read_weightings.get_shape().as_list(), [4, 2])
                 self.assertTrue(isinstance(mem.read_vectors, tf.Variable))
-                self.assertEqual(mem.read_vectors.get_shape().as_list(), [2, 5])
+                self.assertEqual(mem.read_vectors.get_shape().as_list(), [5, 2])
 
 
     def test_lookup_weighting(self):
@@ -42,12 +42,12 @@ class DNCMemoryTests(unittest.TestCase):
                 strengths = np.array([0.7, 0.2]).astype(np.float32)
                 predicted_weights = np.array([[0.25, 0.25, 0.25, 0.25], [0.25, 0.25, 0.25, 0.25]]).astype(np.float32)
 
-                op = mem.get_lookup_weighting(keys, strengths)
+                op = mem.get_lookup_weighting(keys.T, strengths)
                 session.run(tf.initialize_all_variables())
                 c = session.run(op)
 
-                self.assertTrue(c.shape, (2, 4))
-                self.assertTrue(np.array_equal(c, predicted_weights))
+                self.assertEqual(c.shape, (4, 2))
+                self.assertTrue(np.array_equal(c, predicted_weights.T))
 
 
     def test_update_usage_vector(self):
@@ -60,7 +60,7 @@ class DNCMemoryTests(unittest.TestCase):
                 predicted_usage = np.array([0.49429685,  0.49429685,  0.49429685,  0.49429685]).astype(np.float32)
 
                 changes = [
-                    mem.read_weightings.assign(tf.fill([2, 4], 0.25)),
+                    mem.read_weightings.assign(tf.fill([4, 2], 0.25)),
                     mem.write_weighting.assign(tf.fill([4, ], 0.25)),
                     mem.usage_vector.assign(tf.fill([4, ], 0.5))
                 ]
@@ -197,9 +197,9 @@ class DNCMemoryTests(unittest.TestCase):
 
                 mem = Memory(4, 5, 2)
                 _link_matrix = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
-                _read_weightings = np.full((2, 4), 0.25)
-                predicted_forward = np.dot(_read_weightings, _link_matrix)
-                predicted_backward = np.dot(_read_weightings, _link_matrix.T)
+                _read_weightings = np.full((4, 2), 0.25)
+                predicted_forward = np.dot(_link_matrix, _read_weightings)
+                predicted_backward = np.dot(_link_matrix.T, _read_weightings)
 
                 changes = [
                     mem.read_weightings.assign(_read_weightings)
@@ -222,16 +222,16 @@ class DNCMemoryTests(unittest.TestCase):
             with tf.Session(graph=graph) as session:
 
                 mem = Memory(4, 5, 2)
-                lookup_weightings = np.full((2, 4), 0.25).astype(np.float32)
-                forward_weighting = np.array([[0.5, 0.23, 0.14, 0.062], [0.062, 0.23, 0.5, 0.14]]).astype(np.float32)
-                backward_weighting = np.array([[0.01, 0.15, 0.068, 0.62], [0.62, 0.15, 0.01, 0.62]]).astype(np.float32)
-                read_mode = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32)
-                predicted_weights = np.zeros((2, 4)).astype(np.float32)
+                lookup_weightings = np.full((4, 2), 0.25).astype(np.float32)
+                forward_weighting = np.array([[0.5, 0.23, 0.14, 0.062], [0.062, 0.23, 0.5, 0.14]]).astype(np.float32).T
+                backward_weighting = np.array([[0.01, 0.15, 0.068, 0.62], [0.62, 0.15, 0.01, 0.62]]).astype(np.float32).T
+                read_mode = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32).T
+                predicted_weights = np.zeros((4, 2)).astype(np.float32)
 
                 # calculate the predicted weights using iterative method from paper
                 # to check the correcteness of the vectorized implementation
                 for i in range(2):
-                    predicted_weights[i] = read_mode[i,0] * backward_weighting[i] + read_mode[i, 1] * lookup_weightings[i] + read_mode[i, 2] * forward_weighting[i]
+                    predicted_weights[:, i] = read_mode[0,i] * backward_weighting[:, i] + read_mode[1, i] * lookup_weightings[:, i] + read_mode[2, i] * forward_weighting[:, i]
 
                 op = mem.update_read_weightings(lookup_weightings, forward_weighting, backward_weighting, read_mode)
                 session.run(tf.initialize_all_variables())
@@ -249,8 +249,8 @@ class DNCMemoryTests(unittest.TestCase):
 
                 mem = Memory(4, 5, 2)
                 memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
-                read_weightings = np.array([[0.07, 0.36, 0.51, 0.06], [0.51, 0.07, 0.06, 0.36]]).astype(np.float32)
-                predicted = np.dot(read_weightings, memory_matrix)
+                read_weightings = np.array([[0.07, 0.36, 0.51, 0.06], [0.51, 0.07, 0.06, 0.36]]).astype(np.float32).T
+                predicted = np.dot(memory_matrix.T, read_weightings)
 
                 op = mem.update_read_vectors(memory_matrix, read_weightings)
                 session.run(tf.initialize_all_variables())
@@ -266,7 +266,7 @@ class DNCMemoryTests(unittest.TestCase):
             with tf.Session(graph = graph) as session:
 
                 mem = Memory(4, 5, 2)
-                key = np.array([[0., 1., 0., 0.3, 4.3]]).astype(np.float32)
+                key = np.array([[0., 1., 0., 0.3, 4.3]]).astype(np.float32).T
                 strength = np.array([0.7]).astype(np.float32)
                 free_gates = np.array([0.2, 0.67]).astype(np.float32)
                 write_gate, allocation_gate = 0.65, 0.2
@@ -287,17 +287,17 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph = graph) as session:
                 mem = Memory(4, 5, 2)
-                keys = np.array([[0., 1., 0., 0.3, 4.3], [1.3, 0.8, 0., 0., 0.62]]).astype(np.float32)
+                keys = np.array([[0., 1., 0., 0.3, 4.3], [1.3, 0.8, 0., 0., 0.62]]).astype(np.float32).T
                 strengths = np.array([0.7, 0.2]).astype(np.float32)
                 link_matrix = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
-                read_modes = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32)
+                read_modes = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32).T
                 memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
 
                 op = mem.read(keys, strengths, link_matrix, read_modes, memory_matrix)
                 session.run(tf.initialize_all_variables())
                 r = session.run(op)
-                
-                self.assertEqual(r.shape, (2, 5))
+
+                self.assertEqual(r.shape, (5, 2))
 
 
 if __name__ == '__main__':
