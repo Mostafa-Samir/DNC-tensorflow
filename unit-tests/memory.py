@@ -122,11 +122,15 @@ class DNCMemoryTests(unittest.TestCase):
                 mem = Memory(4, 5, 2)
                 write_weighting = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
                 write_vector = np.array([1.8, 3.548, 4.2, 0.269, 0.001]).astype(np.float32)
-                erase_vector = np.zeros(5).astype(np.float32)
-                predicted = np.outer(write_weighting, write_vector)
+                erase_vector = np.random.uniform(0, 1, 5).astype(np.float32)
+                memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
+                predicted = memory_matrix * (1 - np.outer(write_weighting, erase_vector)) + np.outer(write_weighting, write_vector)
+
+                change = mem.memory_matrix.assign(memory_matrix)
 
                 op = mem.update_memory(write_weighting, write_vector, erase_vector)
                 session.run(tf.initialize_all_variables())
+                session.run(change)
                 M = session.run(op)
                 updated_memory = session.run(mem.memory_matrix.value())
 

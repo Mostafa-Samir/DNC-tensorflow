@@ -37,9 +37,6 @@ class Memory:
 
             self.read_vectors = tf.Variable(tf.zeros([word_size, read_heads]), name='read_vectors', trainable=False)
 
-            # a constant array of ones to be used in writing
-            self.E = tf.ones([words_num, word_size])
-
             # a words_num x words_num identity matrix
             self.I = tf.constant(np.identity(words_num, dtype=np.float32))
 
@@ -167,7 +164,7 @@ class Memory:
         write_vector = tf.reshape(write_vector, [-1, 1])
         erase_vector = tf.reshape(erase_vector, [-1, 1])
 
-        erasing = self.memory_matrix * (self.E - tf.matmul(write_weighting, erase_vector, transpose_b=True))
+        erasing = self.memory_matrix * (1 - tf.matmul(write_weighting, erase_vector, transpose_b=True))
         writing = tf.matmul(write_weighting, write_vector, transpose_b=True)
         updated_memory = self.memory_matrix.assign(erasing + writing)
 
