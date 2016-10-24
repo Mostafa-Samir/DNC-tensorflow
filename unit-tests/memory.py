@@ -4,6 +4,10 @@ import unittest
 
 from dnc.memory import Memory
 
+def random_softmax(shape, axis):
+    rand = np.random.uniform(0, 1, shape).astype(np.float32)
+    return np.exp(rand) / np.sum(np.exp(rand), axis=axis, keepdims=True)
+
 class DNCMemoryTests(unittest.TestCase):
 
     def test_construction(self):
@@ -11,25 +15,26 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
+                mem = Memory(4, 5, 2, 2)
                 session.run(tf.initialize_all_variables())
 
                 self.assertEqual(mem.words_num, 4)
                 self.assertEqual(mem.word_size, 5)
                 self.assertEqual(mem.read_heads, 2)
+                self.assertEqual(mem.batch_size, 2)
 
                 self.assertTrue(isinstance(mem.memory_matrix, tf.Variable))
-                self.assertEqual(mem.memory_matrix.get_shape().as_list(), [4, 5])
+                self.assertEqual(mem.memory_matrix.get_shape().as_list(), [2, 4, 5])
                 self.assertTrue(isinstance(mem.usage_vector, tf.Variable))
-                self.assertEqual(mem.usage_vector.get_shape().as_list(), [4])
+                self.assertEqual(mem.usage_vector.get_shape().as_list(), [2, 4])
                 self.assertTrue(isinstance(mem.link_matrix, tf.Variable))
-                self.assertEqual(mem.link_matrix.get_shape().as_list(), [4, 4])
+                self.assertEqual(mem.link_matrix.get_shape().as_list(), [2, 4, 4])
                 self.assertTrue(isinstance(mem.write_weighting, tf.Variable))
-                self.assertEqual(mem.write_weighting.get_shape().as_list(), [4])
+                self.assertEqual(mem.write_weighting.get_shape().as_list(), [2, 4])
                 self.assertTrue(isinstance(mem.read_weightings, tf.Variable))
-                self.assertEqual(mem.read_weightings.get_shape().as_list(), [4, 2])
+                self.assertEqual(mem.read_weightings.get_shape().as_list(), [2, 4, 2])
                 self.assertTrue(isinstance(mem.read_vectors, tf.Variable))
-                self.assertEqual(mem.read_vectors.get_shape().as_list(), [5, 2])
+                self.assertEqual(mem.read_vectors.get_shape().as_list(), [2, 5, 2])
 
 
     def test_lookup_weighting(self):
@@ -37,17 +42,24 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                keys = np.array([[0., 1., 0., 0.3, 4.3], [1.3, 0.8, 0., 0., 0.62]]).astype(np.float32)
-                strengths = np.array([0.7, 0.2]).astype(np.float32)
-                predicted_weights = np.array([[0.25, 0.25, 0.25, 0.25], [0.25, 0.25, 0.25, 0.25]]).astype(np.float32)
+                mem = Memory(4, 5, 2, 2)
+                initial_mem = np.random.uniform(0, 1, (2, 4, 5)).astype(np.float32)
+                keys = np.random.uniform(0, 1, (2, 5, 2)).astype(np.float32)
+                strengths = np.random.uniform(0, 1, (2 ,2)).astype(np.float32)
 
-                op = mem.get_lookup_weighting(keys.T, strengths)
+                norm_mem = initial_mem / np.sqrt(np.sum(initial_mem ** 2, axis=2, keepdims=True))
+                norm_keys = keys/ np.sqrt(np.sum(keys ** 2, axis = 1, keepdims=True))
+                sim = np.matmul(norm_mem, norm_keys)
+                sim = sim * strengths[:, np.newaxis, :]
+                predicted_wieghts = np.exp(sim) / np.sum(np.exp(sim), axis=1, keepdims=True)
+
+                op = mem.get_lookup_weighting(keys, strengths)
                 session.run(tf.initialize_all_variables())
+                session.run(mem.memory_matrix.assign(initial_mem))
                 c = session.run(op)
 
-                self.assertEqual(c.shape, (4, 2))
-                self.assertTrue(np.array_equal(c, predicted_weights.T))
+                self.assertEqual(c.shape, (2, 4, 2))
+                self.assertTrue(np.allclose(c, predicted_wieghts))
 
 
     def test_update_usage_vector(self):
@@ -55,14 +67,19 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                free_gates = np.array([0.2, 0.67]).astype(np.float32)
-                predicted_usage = np.array([0.49429685,  0.49429685,  0.49429685,  0.49429685]).astype(np.float32)
+                mem = Memory(4, 5, 2, 2)
+                free_gates = np.random.uniform(0, 1, (2, 2)).astype(np.float32)
+                init_read_weightings = random_softmax((2, 4, 2), axis=1)
+                init_write_weightings = random_softmax((2, 4), axis=1)
+                init_usage = np.random.uniform(0, 1, (2, 4)).astype(np.float32)
+
+                psi = np.product(1 - init_read_weightings * free_gates[:, np.newaxis, :], axis=2)
+                predicted_usage = (init_usage + init_write_weightings - init_usage * init_write_weightings) * psi
 
                 changes = [
-                    mem.read_weightings.assign(tf.fill([4, 2], 0.25)),
-                    mem.write_weighting.assign(tf.fill([4, ], 0.25)),
-                    mem.usage_vector.assign(tf.fill([4, ], 0.5))
+                    mem.read_weightings.assign(init_read_weightings),
+                    mem.write_weighting.assign(init_write_weightings),
+                    mem.usage_vector.assign(init_usage)
                 ]
                 op = mem.update_usage_vector(free_gates)
                 session.run(tf.initialize_all_variables())
@@ -70,7 +87,7 @@ class DNCMemoryTests(unittest.TestCase):
                 u = session.run(op)
                 updated_usage = session.run(mem.usage_vector.value())
 
-                self.assertEqual(u.shape, (4, ))
+                self.assertEqual(u.shape, (2, 4))
                 self.assertTrue(np.array_equal(u, predicted_usage))
                 self.assertTrue(np.array_equal(updated_usage, predicted_usage))
 
@@ -80,16 +97,22 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                sorted_usage = np.array([0.2, 0.4, 0.7, 1]).astype(np.float32)
-                free_list = np.array([2, 3, 1, 0]).astype(np.int32)
-                predicted_weights = np.array([0., 0.024, 0.8, 0.12]).astype(np.float32)
+                mem = Memory(4, 5, 2, 2)
+                mock_usage = np.random.uniform(0.01, 1, (2, 4)).astype(np.float32)
+                sorted_usage = np.sort(mock_usage, axis=1)
+                free_list = np.argsort(mock_usage, axis=1)
+
+                predicted_weights = np.zeros((2, 4)).astype(np.float32)
+                for i in range(2):
+                    for j in range(4):
+                        product_list = [mock_usage[i, free_list[i,k]] for k in range(j)]
+                        predicted_weights[i, free_list[i,j]] = (1 - mock_usage[i, free_list[i, j]]) * np.product(product_list)
 
                 op = mem.get_allocation_weighting(sorted_usage, free_list)
                 session.run(tf.initialize_all_variables())
                 a = session.run(op)
 
-                self.assertEqual(a.shape, (4, ))
+                self.assertEqual(a.shape, (2, 4))
                 self.assertTrue(np.allclose(a, predicted_weights))
 
 
@@ -98,18 +121,20 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                write_gate, allocation_gate = 0.65, 0.2
-                lookup_weighting = np.array([[0.25, 0.25, 0.25, 0.25]]).astype(np.float32)
-                allocation_weighting = np.array([0., 0.024, 0.8, 0.12]).astype(np.float32)
-                predicted_weights = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
+                mem = Memory(4, 5, 2, 2)
+                write_gate = np.random.uniform(0, 1, (2,1)).astype(np.float32)
+                allocation_gate = np.random.uniform(0, 1, (2,1)).astype(np.float32)
+                lookup_weighting = random_softmax((2, 4, 1), axis=1)
+                allocation_weighting = random_softmax((2, 4), axis=1)
+
+                predicted_weights = write_gate * (allocation_gate * allocation_weighting + (1 - allocation_gate) * np.squeeze(lookup_weighting))
 
                 op = mem.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
                 session.run(tf.initialize_all_variables())
                 w_w = session.run(op)
                 updated_write_weighting = session.run(mem.write_weighting.value())
 
-                self.assertEqual(w_w.shape, (4, ))
+                self.assertEqual(w_w.shape, (2,4))
                 self.assertTrue(np.allclose(w_w, predicted_weights))
                 self.assertTrue(np.allclose(updated_write_weighting, predicted_weights))
 
@@ -119,12 +144,15 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                write_weighting = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
-                write_vector = np.array([1.8, 3.548, 4.2, 0.269, 0.001]).astype(np.float32)
-                erase_vector = np.random.uniform(0, 1, 5).astype(np.float32)
-                memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
-                predicted = memory_matrix * (1 - np.outer(write_weighting, erase_vector)) + np.outer(write_weighting, write_vector)
+                mem = Memory(4, 5, 2, 2)
+                write_weighting = random_softmax((2, 4), axis=1)
+                write_vector = np.random.uniform(0, 1, (2, 5)).astype(np.float32)
+                erase_vector = np.random.uniform(0, 1, (2, 5)).astype(np.float32)
+                memory_matrix = np.random.uniform(-1, 1, (2, 4, 5)).astype(np.float32)
+
+                ww = write_weighting[:, :, np.newaxis]
+                v, e = write_vector[:, np.newaxis, :], erase_vector[:, np.newaxis, :]
+                predicted = memory_matrix * (1 - np.matmul(ww, e)) + np.matmul(ww, v)
 
                 change = mem.memory_matrix.assign(memory_matrix)
 
@@ -134,7 +162,7 @@ class DNCMemoryTests(unittest.TestCase):
                 M = session.run(op)
                 updated_memory = session.run(mem.memory_matrix.value())
 
-                self.assertEqual(M.shape, (4, 5))
+                self.assertEqual(M.shape, (2, 4, 5))
                 self.assertTrue(np.allclose(M, predicted))
                 self.assertTrue(np.allclose(updated_memory, predicted))
 
@@ -143,16 +171,18 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                write_weighting = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
-                predicted = write_weighting
+                mem = Memory(4, 5, 2, 2)
+                write_weighting = random_softmax((2, 4), axis=1)
+                initial_precedence = random_softmax((2, 4), axis=1)
+                predicted = (1 - write_weighting.sum(axis=1, keepdims=True)) * initial_precedence + write_weighting
 
                 op = mem.update_precedence_vector(write_weighting)
                 session.run(tf.initialize_all_variables())
+                session.run(mem.precedence_vector.assign(initial_precedence))
                 p = session.run(op)
                 updated_precedence_vector = session.run(mem.precedence_vector.value())
 
-                self.assertEqual(p.shape, (4, ))
+                self.assertEqual(p.shape, (2,4))
                 self.assertTrue(np.allclose(p, predicted))
                 self.assertTrue(np.allclose(updated_precedence_vector, predicted))
 
@@ -162,20 +192,21 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                _write_weighting = np.array([0.13, 0.13312, 0.234, 0.14560001]).astype(np.float32)
-                _precedence_vector = np.array([0.17644639, 0.18068111, 0.31760353, 0.19761997]).astype(np.float32)
-                initial_link = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
-                np.fill_diagonal(initial_link, 0)
+                mem = Memory(4, 5, 2, 2)
+                _write_weighting = random_softmax((2, 4), axis=1)
+                _precedence_vector = random_softmax((2, 4), axis=1)
+                initial_link = np.random.uniform(0, 1, (2, 4, 4)).astype(np.float32)
+                np.fill_diagonal(initial_link[0,:], 0)
+                np.fill_diagonal(initial_link[1,:], 0)
 
                 # calculate the updated link iteratively as in paper
                 # to check the correcteness of the vectorized implementation
-                predicted = np.zeros((4,4), dtype=np.float32)
+                predicted = np.zeros((2,4,4), dtype=np.float32)
                 for i in range(4):
                     for j in range(4):
                         if i != j:
-                            reset_factor = (1 - _write_weighting[i] - _write_weighting[j])
-                            predicted[i, j]  = reset_factor * initial_link[i , j] + _write_weighting[i] * _precedence_vector[j]
+                            reset_factor = (1 - _write_weighting[:,i] - _write_weighting[:,j])
+                            predicted[:, i, j]  = reset_factor * initial_link[:, i , j] + _write_weighting[:, i] * _precedence_vector[:, j]
 
                 changes = [
                     mem.link_matrix.assign(initial_link),
@@ -199,11 +230,11 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                _link_matrix = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
-                _read_weightings = np.full((4, 2), 0.25)
-                predicted_forward = np.dot(_link_matrix, _read_weightings)
-                predicted_backward = np.dot(_link_matrix.T, _read_weightings)
+                mem = Memory(4, 5, 2, 2)
+                _link_matrix = np.random.uniform(0, 1, (2, 4, 4)).astype(np.float32)
+                _read_weightings = random_softmax((2, 4, 2), axis=1)
+                predicted_forward = np.matmul(_link_matrix, _read_weightings)
+                predicted_backward = np.matmul(np.transpose(_link_matrix, [0, 2, 1]), _read_weightings)
 
                 changes = [
                     mem.read_weightings.assign(_read_weightings)
@@ -225,17 +256,17 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                mem = Memory(4, 5, 2)
-                lookup_weightings = np.full((4, 2), 0.25).astype(np.float32)
-                forward_weighting = np.array([[0.5, 0.23, 0.14, 0.062], [0.062, 0.23, 0.5, 0.14]]).astype(np.float32).T
-                backward_weighting = np.array([[0.01, 0.15, 0.068, 0.62], [0.62, 0.15, 0.01, 0.62]]).astype(np.float32).T
-                read_mode = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32).T
-                predicted_weights = np.zeros((4, 2)).astype(np.float32)
+                mem = Memory(4, 5, 2, 2)
+                lookup_weightings = random_softmax((2, 4, 2), axis=1)
+                forward_weighting = random_softmax((2, 4, 2), axis=1)
+                backward_weighting = random_softmax((2, 4, 2), axis=1)
+                read_mode = random_softmax((2, 3, 2), axis=1)
+                predicted_weights = np.zeros((2, 4, 2)).astype(np.float32)
 
                 # calculate the predicted weights using iterative method from paper
                 # to check the correcteness of the vectorized implementation
                 for i in range(2):
-                    predicted_weights[:, i] = read_mode[0,i] * backward_weighting[:, i] + read_mode[1, i] * lookup_weightings[:, i] + read_mode[2, i] * forward_weighting[:, i]
+                    predicted_weights[:, :, i] = read_mode[:, 0,i, np.newaxis] * backward_weighting[:, :, i] + read_mode[:, 1, i, np.newaxis] * lookup_weightings[:, :, i] + read_mode[:, 2, i, np.newaxis] * forward_weighting[:, :, i]
 
                 op = mem.update_read_weightings(lookup_weightings, forward_weighting, backward_weighting, read_mode)
                 session.run(tf.initialize_all_variables())
@@ -251,10 +282,10 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph = graph) as session:
 
-                mem = Memory(4, 5, 2)
-                memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
-                read_weightings = np.array([[0.07, 0.36, 0.51, 0.06], [0.51, 0.07, 0.06, 0.36]]).astype(np.float32).T
-                predicted = np.dot(memory_matrix.T, read_weightings)
+                mem = Memory(4, 5, 2, 4)
+                memory_matrix = np.random.uniform(-1, 1, (4, 4, 5)).astype(np.float32)
+                read_weightings = random_softmax((4, 4, 2), axis=1)
+                predicted = np.matmul(np.transpose(memory_matrix, [0, 2, 1]), read_weightings)
 
                 op = mem.update_read_vectors(memory_matrix, read_weightings)
                 session.run(tf.initialize_all_variables())
@@ -269,20 +300,21 @@ class DNCMemoryTests(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph = graph) as session:
 
-                mem = Memory(4, 5, 2)
-                key = np.array([[0., 1., 0., 0.3, 4.3]]).astype(np.float32).T
-                strength = np.array([0.7]).astype(np.float32)
-                free_gates = np.array([0.2, 0.67]).astype(np.float32)
-                write_gate, allocation_gate = 0.65, 0.2
-                write_vector = np.array([1.8, 3.548, 4.2, 0.269, 0.001]).astype(np.float32)
-                erase_vector = np.zeros(5).astype(np.float32)
+                mem = Memory(4, 5, 2, 1)
+                key = np.random.uniform(0, 1, (1, 5, 1)).astype(np.float32)
+                strength = np.random.uniform(0, 1, (1, 1)).astype(np.float32)
+                free_gates = np.random.uniform(0, 1, (1, 2)).astype(np.float32)
+                write_gate = np.random.uniform(0, 1, (1, 1)).astype(np.float32)
+                allocation_gate = np.random.uniform(0, 1, (1,1)).astype(np.float32)
+                write_vector = np.random.uniform(0, 1, (1, 5)).astype(np.float32)
+                erase_vector = np.zeros((1, 5)).astype(np.float32)
 
                 M_op, L_op = mem.write(key, strength, free_gates, allocation_gate, write_gate , write_vector, erase_vector)
                 session.run(tf.initialize_all_variables())
                 M, L = session.run([M_op, L_op])
 
-                self.assertEqual(M.shape, (4, 5))
-                self.assertEqual(L.shape, (4, 4))
+                self.assertEqual(M.shape, (1, 4, 5))
+                self.assertEqual(L.shape, (1, 4, 4))
 
 
 
@@ -290,18 +322,18 @@ class DNCMemoryTests(unittest.TestCase):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph = graph) as session:
-                mem = Memory(4, 5, 2)
-                keys = np.array([[0., 1., 0., 0.3, 4.3], [1.3, 0.8, 0., 0., 0.62]]).astype(np.float32).T
-                strengths = np.array([0.7, 0.2]).astype(np.float32)
-                link_matrix = np.random.uniform(0, 1, (4, 4)).astype(np.float32)
-                read_modes = np.array([[0.1, 0.6, 0.3], [0.01, 0.98, 0.01]]).astype(np.float32).T
-                memory_matrix = np.random.uniform(-1, 1, (4, 5)).astype(np.float32)
+                mem = Memory(4, 5, 2, 1)
+                keys = np.random.uniform(0, 1, (1, 5, 2)).astype(np.float32)
+                strengths = np.random.uniform(0, 1, (1, 2)).astype(np.float32)
+                link_matrix = np.random.uniform(0, 1, (1, 4, 4)).astype(np.float32)
+                read_modes = random_softmax((1, 3, 2), axis=1).astype(np.float32)
+                memory_matrix = np.random.uniform(-1, 1, (1, 4, 5)).astype(np.float32)
 
                 op = mem.read(keys, strengths, link_matrix, read_modes, memory_matrix)
                 session.run(tf.initialize_all_variables())
                 r = session.run(op)
 
-                self.assertEqual(r.shape, (5, 2))
+                self.assertEqual(r.shape, (1, 5, 2))
 
 
 if __name__ == '__main__':

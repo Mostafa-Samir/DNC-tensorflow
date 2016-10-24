@@ -4,7 +4,7 @@ import utility
 
 class Memory:
 
-    def __init__(self, words_num=256, word_size=64, read_heads=4):
+    def __init__(self, words_num=256, word_size=64, read_heads=4, batch_size=1):
         """
         constructs a memory matrix with read heads and a write head as described
         in the DNC paper
@@ -19,30 +19,37 @@ class Memory:
             the size of the individual word in the memory
         read_heads: int
             the number of read heads that can read simultaneously from the memory
+        batch_size: int
+            the size of input data batch
         """
 
         self.words_num = words_num
         self.word_size = word_size
         self.read_heads = read_heads
+        self.batch_size = batch_size
 
         with tf.variable_scope('external_memory'):
 
-            self.memory_matrix = tf.Variable(tf.zeros([words_num, word_size]), name='memory_matrix', trainable=False)
-            self.usage_vector = tf.Variable(tf.zeros([words_num, ]), name='usage_vector', trainable=False)
-            self.precedence_vector = tf.Variable(tf.zeros([words_num, ]), name='precedence_vector', trainable=False)
-            self.link_matrix = tf.Variable(tf.zeros([words_num, words_num]), name='link_matrix', trainable=False)
+            self.memory_matrix = tf.Variable(tf.zeros([batch_size, words_num, word_size]), name='memory_matrix', trainable=False)
+            self.usage_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='usage_vector', trainable=False)
+            self.precedence_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='precedence_vector', trainable=False)
+            self.link_matrix = tf.Variable(tf.zeros([batch_size, words_num, words_num]), name='link_matrix', trainable=False)
 
-            self.write_weighting = tf.Variable(tf.zeros([words_num, ]), name='write_weighting', trainable=False)
-            self.read_weightings = tf.Variable(tf.zeros([words_num, read_heads]), name='read_weightings', trainable=False)
+            self.write_weighting = tf.Variable(tf.zeros([batch_size, words_num, ]), name='write_weighting', trainable=False)
+            self.read_weightings = tf.Variable(tf.zeros([batch_size, words_num, read_heads]), name='read_weightings', trainable=False)
 
-            self.read_vectors = tf.Variable(tf.zeros([word_size, read_heads]), name='read_vectors', trainable=False)
+            self.read_vectors = tf.Variable(tf.zeros([batch_size, word_size, read_heads]), name='read_vectors', trainable=False)
 
             # a words_num x words_num identity matrix
             self.I = tf.constant(np.identity(words_num, dtype=np.float32))
 
             # a variable used to bring the allocation weighting in order of memory words
             # after computing them using the sorted usage and free list
-            self.ordered_allocation_weighting = tf.Variable(tf.zeros([words_num, ]), trainable=False)
+            self.ordered_allocation_weighting = tf.Variable(tf.zeros([batch_size * words_num]), trainable=False)
+
+            # maps the indecies from the 2D array of free list per batch to
+            # their corresponding values in the flat 1D array of ordered_allocation_weighting
+            self.index_mapper = tf.constant(np.cumsum([0] + [words_num] * (batch_size - 1), dtype=np.int32)[:, np.newaxis])
 
 
 
@@ -52,21 +59,22 @@ class Memory:
 
         Parameters:
         ----------
-        keys: Tensor (word_size, number_of_keys)
+        keys: Tensor (batch_size, word_size, number_of_keys)
             the keys to query the memory with
-        strengths: Tensor (number_of_keys, )
+        strengths: Tensor (batch_size, number_of_keys, )
             the list of strengths for each lookup key
 
-        Returns: Tensor (words_num, number_of_keys)
+        Returns: Tensor (batch_size, words_num, number_of_keys)
             The list of lookup weightings for each provided key
         """
 
-        normalized_memory = tf.nn.l2_normalize(self.memory_matrix, 1)
+        normalized_memory = tf.nn.l2_normalize(self.memory_matrix, 2)
         normalized_keys = tf.nn.l2_normalize(keys, 1)
 
-        similiarity = tf.matmul(normalized_memory, normalized_keys)
+        similiarity = tf.batch_matmul(normalized_memory, normalized_keys)
+        strengths = tf.expand_dims(strengths, 1)
 
-        return tf.nn.softmax(similiarity * strengths, 0)
+        return tf.nn.softmax(similiarity * strengths, 1)
 
 
     def update_usage_vector(self, free_gates):
@@ -75,13 +83,14 @@ class Memory:
 
         Parameters:
         ----------
-        free_gates: Tensor (read_heads, )
+        free_gates: Tensor (batch_size, read_heads, )
 
-        Returns: Tensor (words_num, )
+        Returns: Tensor (batch_size, words_num, )
             the updated usage vector
         """
+        free_gates = tf.expand_dims(free_gates, 1)
 
-        retention_vector = tf.reduce_prod(1 - self.read_weightings * free_gates, 1)
+        retention_vector = tf.reduce_prod(1 - self.read_weightings * free_gates, 2)
         updated_usage = (self.usage_vector + self.write_weighting - self.usage_vector * self.write_weighting)  * retention_vector
         updated_usage = self.usage_vector.assign(updated_usage)
 
@@ -94,19 +103,22 @@ class Memory:
 
         Parameters:
         ----------
-        sorted_usage: Tensor (words_num, )
+        sorted_usage: Tensor (batch_size, words_num, )
             the usage vector sorted ascndingly
-        free_list: Tensor (words_num, )
+        free_list: Tensor (batch, words_num, )
             the original indecies of the sorted usage vector
 
-        Returns: Tensor (words_num, )
+        Returns: Tensor (batch_size, words_num, )
             the allocation weighting for each word in memory
         """
 
-        shifted_cumprod = tf.cumprod(sorted_usage, exclusive=True)
+        shifted_cumprod = tf.cumprod(sorted_usage, axis = 1, exclusive=True)
         unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
 
-        allocation_weighting = tf.scatter_update(self.ordered_allocation_weighting, free_list, unordered_allocation_weighting)
+        mapped_free_list = free_list + self.index_mapper
+
+        allocation_weighting = tf.scatter_update(self.ordered_allocation_weighting, mapped_free_list, unordered_allocation_weighting)
+        allocation_weighting = tf.reshape(allocation_weighting, (self.batch_size, self.words_num))
 
         return allocation_weighting
 
@@ -117,23 +129,21 @@ class Memory:
 
         Parameters:
         ----------
-        lookup_weighting: Tensor (number_of_keys, words_num)
+        lookup_weighting: Tensor (batch_size, words_num, 1)
             the weight of the lookup operation in writing
-        allocation_weighting: Tensor (words_num, )
+        allocation_weighting: Tensor (batch_size, words_num)
             the weight of the allocation operation in writing
-        write_gate: Scalar
+        write_gate: (batch_size, 1)
             the fraction of writing to be done
-        allocation_gate: Scalar
+        allocation_gate: (batch_size, 1)
             the fraction of allocation to be done
 
-        Returns: Tensor (words_num, )
+        Returns: Tensor (batch_size, words_num)
             the updated write_weighting
         """
 
-        # for writing the lookup_weighting will be of shape (1, words_num)
-        # becuase there's only one write key to query the memory with
-        # so it can be reshaped to 1D safely
-        lookup_weighting = tf.reshape(lookup_weighting, [-1, ])
+        # remove the dimension of 1 from the lookup_weighting
+        lookup_weighting = tf.squeeze(lookup_weighting)
 
         updated_write_weighting = write_gate * (allocation_gate * allocation_weighting + (1 - allocation_gate) * lookup_weighting)
         updated_write_weighting = self.write_weighting.assign(updated_write_weighting)
@@ -147,25 +157,25 @@ class Memory:
 
         Parameters:
         ----------
-        write_weighting: Tensor (words_num, )
+        write_weighting: Tensor (batch_size, words_num)
             the weight of writing at each memory location
-        write_vector: Tensor (word_size, )
+        write_vector: Tensor (batch_size, word_size)
             a vector specifying what to write
-        erase_vector: Tensor (word_size, )
+        erase_vector: Tensor (batch_size, word_size)
             a vector specifying what to erase from memory
 
-        Returns: Tensor (words_num, word_size)
+        Returns: Tensor (batch_size, words_num, word_size)
             the updated memory matrix
         """
 
-        # transform vectors to 2D arrays with the last dimension being 1
-        # to be able to carry out the matmuls as outer products
-        write_weighting = tf.reshape(write_weighting, [-1, 1])
-        write_vector = tf.reshape(write_vector, [-1, 1])
-        erase_vector = tf.reshape(erase_vector, [-1, 1])
+        # expand data with a dimension of 1 at multiplication-adjacent location
+        # to force matmul to behave as an outer product
+        write_weighting = tf.expand_dims(write_weighting, 2)
+        write_vector = tf.expand_dims(write_vector, 1)
+        erase_vector = tf.expand_dims(erase_vector, 1)
 
-        erasing = self.memory_matrix * (1 - tf.matmul(write_weighting, erase_vector, transpose_b=True))
-        writing = tf.matmul(write_weighting, write_vector, transpose_b=True)
+        erasing = self.memory_matrix * (1 - tf.batch_matmul(write_weighting, erase_vector))
+        writing = tf.batch_matmul(write_weighting, write_vector)
         updated_memory = self.memory_matrix.assign(erasing + writing)
 
         return updated_memory
@@ -177,14 +187,14 @@ class Memory:
 
         Parameters:
         ----------
-        write_weighting: Tensor (words_num, )
+        write_weighting: Tensor (batch_size,words_num)
             the latest write weighting for the memory
 
-        Returns: Tensor (words_num, )
+        Returns: Tensor (batch_size, words_num)
             the updated precedence vector
         """
 
-        reset_factor = 1 - tf.reduce_sum(write_weighting)
+        reset_factor = 1 - tf.reduce_sum(write_weighting, 1, keep_dims=True)
         updated_precedence_vector = reset_factor * self.precedence_vector + write_weighting
         updated_precedence_vector = self.precedence_vector.assign(updated_precedence_vector)
 
@@ -197,18 +207,18 @@ class Memory:
 
         Parameters:
         ----------
-        write_weighting: Tensor (words_num, )
+        write_weighting: Tensor (batch_size, words_num)
             the latest write_weighting for the memorye
 
-        Returns: Tensor (words_num, words_num)
+        Returns: Tensor (batch_size, words_num, words_num)
             the updated temporal link matrix
         """
 
-        write_weighting = tf.reshape(write_weighting, [-1, 1])
-        precedence_vector = tf.reshape(self.precedence_vector, [-1, 1])
+        write_weighting = tf.expand_dims(write_weighting, 2)
+        precedence_vector = tf.expand_dims(self.precedence_vector, 1)
 
-        reset_factor = 1 - utility.pairwise_add(write_weighting)
-        updated_link_matrix = reset_factor * self.link_matrix + tf.matmul(write_weighting, precedence_vector, transpose_b=True)
+        reset_factor = 1 - utility.pairwise_add(write_weighting, is_batch=True)
+        updated_link_matrix = reset_factor * self.link_matrix + tf.batch_matmul(write_weighting, precedence_vector)
         updated_link_matrix = (1 - self.I) * updated_link_matrix  # eliminates self-links
         updated_link_matrix = self.link_matrix.assign(updated_link_matrix)
 
@@ -221,16 +231,16 @@ class Memory:
 
         Parameters:
         ----------
-        link_matrix: Tensor (words_num, words_num)
+        link_matrix: Tensor (batch_size, words_num, words_num)
             the temporal link matrix
 
         Returns: Tuple
-            forward weighting: Tensor (words_num, read_heads),
-            backward weighting: Tensor (words_num, read_heads)
+            forward weighting: Tensor (batch_size, words_num, read_heads),
+            backward weighting: Tensor (batch_size, words_num, read_heads)
         """
 
-        forward_weighting = tf.matmul(link_matrix, self.read_weightings)
-        backward_weighting = tf.matmul(link_matrix, self.read_weightings, transpose_a=True)
+        forward_weighting = tf.batch_matmul(link_matrix, self.read_weightings)
+        backward_weighting = tf.batch_matmul(link_matrix, self.read_weightings, adj_x=True)
 
         return forward_weighting, backward_weighting
 
@@ -241,21 +251,21 @@ class Memory:
 
         Parameters:
         ----------
-        lookup_weightings: Tensor (words_num, read_heads)
+        lookup_weightings: Tensor (batch_size, words_num, read_heads)
             the content-based read weighting
-        forward_weighting: Tensor (words_num, read_heads)
+        forward_weighting: Tensor (batch_size, words_num, read_heads)
             the forward direction read weighting
-        backward_weighting: Tensor (words_num, read_heads)
+        backward_weighting: Tensor (batch_size, words_num, read_heads)
             the backward direction read weighting
-        read_mode: Tesnor (3, read_heads)
+        read_mode: Tesnor (batch_size, 3, read_heads)
             the softmax distribution between the three read modes
 
-        Returns: Tensor (words_num, read_heads)
+        Returns: Tensor (batch_size, words_num, read_heads)
         """
 
-        backward_mode = read_mode[0, :] * backward_weighting
-        lookup_mode = read_mode[1, :] * lookup_weightings
-        forward_mode = read_mode[2, :] * forward_weighting
+        backward_mode = tf.expand_dims(read_mode[:, 0, :], 1) * backward_weighting
+        lookup_mode = tf.expand_dims(read_mode[:, 1, :], 1) * lookup_weightings
+        forward_mode = tf.expand_dims(read_mode[:, 2, :], 1) * forward_weighting
 
         updated_read_weightings = self.read_weightings.assign(backward_mode + lookup_mode + forward_mode)
 
@@ -268,15 +278,15 @@ class Memory:
 
         Parameters:
         ----------
-        memory_matrix: Tensor (words_num, word_size)
+        memory_matrix: Tensor (batch_size, words_num, word_size)
             the recently updated memory matrix
-        read_weightings: Tensor (words_num, read_heads)
+        read_weightings: Tensor (batch_size, words_num, read_heads)
             the amount of info to read from each memory location by each read head
 
         Returns: Tensor (word_size, read_heads)
         """
 
-        updated_read_vectors = tf.matmul(memory_matrix, read_weightings, transpose_a=True)
+        updated_read_vectors = tf.batch_matmul(memory_matrix, read_weightings, adj_x=True)
         updated_read_vectors = self.read_vectors.assign(updated_read_vectors)
 
         return updated_read_vectors
@@ -288,24 +298,24 @@ class Memory:
 
         Parameters:
         ----------
-        key: Tensor (word_size, )
+        key: Tensor (batch_size, word_size, 1)
             the key to query the memory location with
-        strength: (1, )
+        strength: (batch_size, 1)
             the strength of the query key
-        free_gates: Tensor (read_heads,)
+        free_gates: Tensor (batch_size, read_heads)
             the degree to which location at read haeds will be freed
-        allocation_gate: Scalar
+        allocation_gate: (batch_size, 1)
             the fraction of writing that is being allocated in a new locatio
-        write_gate: Scalar
+        write_gate: (batch_size, 1)
             the amount of information to be written to memory
-        write_vector: Tensor (word_size, )
+        write_vector: Tensor (batch_size, word_size)
             specifications of what to write to memory
-        erase_vector: Tensor(word_size, )
+        erase_vector: Tensor(batch_size, word_size)
             specifications of what to erase from memory
 
         Returns : Tuple
-            the updated memory_matrix: Tensor (words_num, words_size)
-            the updated link matrix: Tensor(words_num, words_num)
+            the updated memory_matrix: Tensor (batch_size, words_num, words_size)
+            the updated link matrix: Tensor(batch_size, words_num, words_num)
         """
 
         lookup_weighting = self.get_lookup_weighting(key, strength)
@@ -329,18 +339,18 @@ class Memory:
 
         Parameters:
         ----------
-        keys: Tensor (word_size, read_heads)
+        keys: Tensor (batch_size, word_size, read_heads)
             the kyes to query the memory locations with
-        strengths: Tensor (read_heads, )
+        strengths: Tensor (batch_size, read_heads)
             the strength of each read key
-        link_matrix: Tensor (words_num, words_num)
+        link_matrix: Tensor (batch_size, words_num, words_num)
             the updated link matrix from the last writing
-        read_modes: Tensor (3, read_heads)
+        read_modes: Tensor (batch_size, 3, read_heads)
             the softmax distribution between the three read modes
-        memory_matrix: Tensor (words_num, word_size)
+        memory_matrix: Tensor (batch_size, words_num, word_size)
             the updated memory matrix from the last writing
 
-        Returns: Tensor (word_size, read_heads)
+        Returns: Tensor (batch_size, word_size, read_heads)
             the recently read vectors
         """
 
