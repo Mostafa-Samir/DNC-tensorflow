@@ -48,13 +48,13 @@ class DNCControllerTest(unittest.TestCase):
 
                 read_keys = np.reshape(zeta[:, :10], (-1, 5, 2))
                 read_strengths = 1 + np.log(np.exp(np.reshape(zeta[:, 10:12], (-1, 2, ))) + 1)
-                write_key = np.reshape(zeta[:, 12:17], (-1, 5))
-                write_strength = 1 + np.log(np.exp(np.reshape(zeta[:, 17], (-1, 1, ))) + 1)
+                write_key = np.reshape(zeta[:, 12:17], (-1, 5, 1))
+                write_strength = 1 + np.log(np.exp(np.reshape(zeta[:, 17], (-1, 1))) + 1)
                 erase_vector = 1.0 / (1 + np.exp(-1 * np.reshape(zeta[:, 18:23], (-1, 5))))
                 write_vector = np.reshape(zeta[:, 23:28], (-1, 5))
                 free_gates = 1.0 / (1 + np.exp(-1 * np.reshape(zeta[:, 28:30], (-1, 2))))
-                allocation_gate = 1.0 / (1 + np.exp(-1 * zeta[:, 30]))
-                write_gate = 1.0 / (1 + np.exp(-1 * zeta[:, 31]))
+                allocation_gate = 1.0 / (1 + np.exp(-1 * zeta[:, 30, np.newaxis]))
+                write_gate = 1.0 / (1 + np.exp(-1 * zeta[:, 31, np.newaxis]))
                 read_modes = np.reshape(zeta[:, 32:], (-1, 3, 2))
 
                 read_modes = np.transpose(read_modes, [0, 2, 1])

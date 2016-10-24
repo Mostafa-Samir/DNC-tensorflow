@@ -100,7 +100,7 @@ class BaseController:
 
         r_keys_shape = (-1, self.word_size, self.read_heads)
         r_strengths_shape = (-1, self.read_heads)
-        w_key_shape = (-1, self.word_size)
+        w_key_shape = (-1, self.word_size, 1)
         write_shape = erase_shape = (-1, self.word_size)
         free_shape = (-1, self.read_heads)
         modes_shape = (-1, 3, self.read_heads)
@@ -109,12 +109,12 @@ class BaseController:
         parsed['read_keys'] = tf.reshape(interface_vector[:, :r_keys_end], r_keys_shape)
         parsed['read_strengths'] = tf.reshape(interface_vector[:, r_keys_end:r_strengths_end], r_strengths_shape)
         parsed['write_key'] = tf.reshape(interface_vector[:, r_strengths_end:w_key_end], w_key_shape)
-        parsed['write_strength'] = tf.reshape(interface_vector[:, w_key_end], (-1, 1, ))
+        parsed['write_strength'] = tf.reshape(interface_vector[:, w_key_end], (-1, 1))
         parsed['erase_vector'] = tf.reshape(interface_vector[:, w_key_end + 1:erase_end], erase_shape)
         parsed['write_vector'] = tf.reshape(interface_vector[:, erase_end:write_end], write_shape)
         parsed['free_gates'] = tf.reshape(interface_vector[:, write_end:free_end], free_shape)
-        parsed['allocation_gate'] = interface_vector[:, free_end]
-        parsed['write_gate'] = interface_vector[:, free_end + 1]
+        parsed['allocation_gate'] = tf.expand_dims(interface_vector[:, free_end], 1)
+        parsed['write_gate'] = tf.expand_dims(interface_vector[:, free_end + 1], 1)
         parsed['read_modes'] = tf.reshape(interface_vector[:, free_end + 2:], modes_shape)
 
         # transforming the components to ensure they're in the right ranges
