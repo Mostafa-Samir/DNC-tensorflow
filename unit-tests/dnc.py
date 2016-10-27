@@ -7,10 +7,11 @@ from dnc.memory import Memory
 from dnc.controller import BaseController
 
 class DummyController(BaseController):
-    def network(self, X):
-        self.W = tf.Variable(tf.truncated_normal([self.nn_input_size, 64]))
-        self.b = tf.Variable(tf.zeros([64]))
+    def network_vars(self):
+        self.W = tf.Variable(tf.truncated_normal([self.nn_input_size, 64]), name='layer_W')
+        self.b = tf.Variable(tf.zeros([64]), name='layer_b')
 
+    def network_op(self, X):
         return tf.matmul(X, self.W) + self.b
 
 
@@ -21,7 +22,7 @@ class DNCTest(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                computer = DNC(DummyController, 10, 20, 10, 64, 1)
+                computer = DNC(DummyController, 10, 20, 10, 10, 64, 1)
 
                 self.assertEqual(computer.input_size, 10)
                 self.assertEqual(computer.output_size, 20)
@@ -39,14 +40,14 @@ class DNCTest(unittest.TestCase):
         with graph.as_default():
             with tf.Session(graph=graph) as session:
 
-                computer = DNC(DummyController, 10, 20, 10, 64, 2, batch_size=3)
+                computer = DNC(DummyController, 10, 20, 10, 10, 64, 2, batch_size=3)
                 input_batches = np.random.uniform(0, 1, (3, 5, 10)).astype(np.float32)
 
-                input_tensor = tf.convert_to_tensor(input_batches)
-                out_op, view_op = computer(input_tensor)
-
                 session.run(tf.initialize_all_variables())
-                out, view = session.run([out_op, view_op])
+                out, view = session.run(computer.get_outputs(), feed_dict={
+                    computer.input_data: input_batches,
+                    computer.sequence_length: 5
+                })
 
                 self.assertEqual(out.shape, (3, 5, 20))
                 self.assertEqual(view['free_gates'].shape, (3, 5, 2))
