@@ -5,10 +5,11 @@ import unittest
 from dnc.controller import BaseController
 
 class DummyController(BaseController):
-    def network(self, X):
+    def network_vars(self):
         self.W = tf.Variable(tf.truncated_normal([self.nn_input_size, 64]))
         self.b = tf.Variable(tf.zeros([64]))
 
+    def network_op(self, X):
         return tf.matmul(X, self.W) + self.b
 
 

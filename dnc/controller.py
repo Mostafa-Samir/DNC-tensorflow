@@ -31,17 +31,27 @@ class BaseController:
 
         self.interface_vector_size = self.word_size * self.read_heads + 3 * self.word_size + 5 * self.read_heads + 3
 
-        nn_output_size = self.get_nn_output_size()
-
+        # define network vars
         with tf.name_scope("controller"):
+            self.network_vars()
+
+            nn_output_size = self.get_nn_output_size()
+
             # defining internal weights of the controller
             self.interface_weights = tf.Variable(tf.truncated_normal([nn_output_size, self.interface_vector_size]), name='interface_weights')
             self.nn_output_weights = tf.Variable(tf.truncated_normal([nn_output_size, self.output_size]), name='nn_output_weights')
             self.mem_output_weights = tf.Variable(tf.truncated_normal([self.word_size * self.read_heads, self.output_size]), name='mem_output_weights')
 
 
+    def network_vars(self):
+        """
+        defines the variables needed by the internal neural network
+        [the variables should be attributes of the class, i.e. self.*]
+        """
+        raise NotImplementedError("network_vars is not implemented")
 
-    def network(self, X):
+
+    def network_op(self, X):
         """
         defines the controller's internal neural network operation
 
@@ -52,7 +62,7 @@ class BaseController:
 
         Returns: Tensor (batch_size, nn_output_size)
         """
-        raise NotImplementedError("network method is not implemented")
+        raise NotImplementedError("network_op method is not implemented")
 
 
     def get_nn_output_size(self):
@@ -66,7 +76,7 @@ class BaseController:
         """
 
         input_vector =  np.zeros([1, self.nn_input_size], dtype=np.float32)
-        output_vector = self.network(input_vector)
+        output_vector = self.network_op(input_vector)
         shape = output_vector.get_shape().as_list()
 
         if len(shape) > 2:
@@ -148,7 +158,7 @@ class BaseController:
         flat_read_vectors = tf.reshape(last_read_vectors, (-1, self.word_size * self.read_heads))
         complete_input = tf.concat(1, [X, flat_read_vectors])
 
-        nn_output = self.network(complete_input)
+        nn_output = self.network_op(complete_input)
 
         pre_output = tf.matmul(nn_output, self.nn_output_weights)
         interface = tf.matmul(nn_output, self.interface_weights)
