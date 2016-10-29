@@ -1,5 +1,6 @@
 import tensorflow as tf
 from memory import Memory
+import os
 
 class DNC:
 
@@ -163,3 +164,36 @@ class DNC:
             memory_view: dict
         """
         return self.packed_output, self.packed_memory_view
+
+
+    def save(self, session, ckpts_dir, name):
+        """
+        saves the current values of the model's parameters to a checkpoint
+
+        Parameters:
+        ----------
+        session: tf.Session
+            the tensorflow session to save
+        ckpts_dir: string
+            the path to the checkpoints directories
+        name: string
+            the name of the checkpoint subdirectory
+        """
+        checkpoint_dir = os.path.join(ckpts_dir, name)
+
+        if not os.path.exists(checkpoint_dir):
+            os.makedirs(checkpoint_dir)
+
+        tf.train.Saver(tf.trainable_variables()).save(session, os.path.join(checkpoint_dir, 'model.ckpt'))
+
+
+    def restore(self, session, ckpts_dir, name):
+        """
+        session: tf.Session
+            the tensorflow session to restore into
+        ckpts_dir: string
+            the path to the checkpoints directories
+        name: string
+            the name of the checkpoint subdirectory
+        """
+        tf.train.Saver(tf.trainable_variables()).restore(session, os.path.join(ckpts_dir, name, 'model.ckpt'))
