@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.ops import gen_state_ops
 
 def pairwise_add(u, v=None, is_batch=False):
     """
@@ -41,3 +42,45 @@ def pairwise_add(u, v=None, is_batch=False):
         V = tf.concat(0 if not is_batch else 1, [row_v] * n)
 
         return U + V
+
+
+def allocate(shape, dtype=tf.float32, name=None):
+    """
+    allocates a temporary variable with given shape, dtype,and name
+
+    Parameters:
+    ----------
+    shape: iterable
+        the desired shape of the variable
+    dtype: tf.DType
+        the variable's data type
+    name: string
+        the name of the variable
+
+    Returns: Tuple
+        tf.Variable: the allocated variable,
+        string: the allocation op name (used for deallocating later)
+    """
+
+    var = gen_state_ops._temporary_variable(shape=shape, dtype=dtype)
+    var_name = var.op.name
+
+    return var, var_name
+
+
+def read_and_deallocate(var, var_name):
+    """
+    deallocates a previously allocted temporary variable and returns its value
+
+    Parameters:
+    ----------
+    var: tf.Variable
+        the previously allocated variable
+    var_name: string
+        the previously allocated variable allocation's op name
+
+    Returns: Tensor
+        the variable's value
+    """
+
+    return gen_state_ops._destroy_temporary_variable(var, var_name=var_name)
