@@ -28,17 +28,17 @@ class Memory:
         self.read_heads = read_heads
         self.batch_size = batch_size
 
-        with tf.variable_scope('external_memory'):
+        with tf.name_scope('external_memory'):
 
-            self.memory_matrix = tf.Variable(tf.zeros([batch_size, words_num, word_size]), name='memory_matrix', trainable=False)
-            self.usage_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='usage_vector', trainable=False)
-            self.precedence_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='precedence_vector', trainable=False)
-            self.link_matrix = tf.Variable(tf.zeros([batch_size, words_num, words_num]), name='link_matrix', trainable=False)
+            self.memory_matrix = tf.zeros([batch_size, words_num, word_size], name='memory_matrix')
+            self.usage_vector = tf.zeros([batch_size, words_num, ], name='usage_vector')
+            self.precedence_vector = tf.zeros([batch_size, words_num, ], name='precedence_vector')
+            self.link_matrix = tf.zeros([batch_size, words_num, words_num], name='link_matrix')
 
-            self.write_weighting = tf.Variable(tf.zeros([batch_size, words_num, ]), name='write_weighting', trainable=False)
-            self.read_weightings = tf.Variable(tf.zeros([batch_size, words_num, read_heads]), name='read_weightings', trainable=False)
+            self.write_weighting = tf.zeros([batch_size, words_num, ], name='write_weighting')
+            self.read_weightings = tf.zeros([batch_size, words_num, read_heads], name='read_weightings')
 
-            self.read_vectors = tf.Variable(tf.zeros([batch_size, word_size, read_heads]), name='read_vectors', trainable=False)
+            self.read_vectors = tf.zeros([batch_size, word_size, read_heads])
 
             # a words_num x words_num identity matrix
             self.I = tf.constant(np.identity(words_num, dtype=np.float32))
