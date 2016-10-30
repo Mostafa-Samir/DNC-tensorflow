@@ -30,22 +30,18 @@ class Memory:
 
         with tf.name_scope('external_memory'):
 
-            self.memory_matrix = tf.zeros([batch_size, words_num, word_size], name='memory_matrix')
-            self.usage_vector = tf.zeros([batch_size, words_num, ], name='usage_vector')
-            self.precedence_vector = tf.zeros([batch_size, words_num, ], name='precedence_vector')
-            self.link_matrix = tf.zeros([batch_size, words_num, words_num], name='link_matrix')
+            self.memory_matrix = tf.Variable(tf.zeros([batch_size, words_num, word_size]), name='memory_matrix', trainable=False)
+            self.usage_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='usage_vector', trainable=False)
+            self.precedence_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='precedence_vector', trainable=False)
+            self.link_matrix = tf.Variable(tf.zeros([batch_size, words_num, words_num]), name='link_matrix', trainable=False)
 
-            self.write_weighting = tf.zeros([batch_size, words_num, ], name='write_weighting')
-            self.read_weightings = tf.zeros([batch_size, words_num, read_heads], name='read_weightings')
+            self.write_weighting = tf.Variable(tf.zeros([batch_size, words_num, ]), name='write_weighting', trainable=False)
+            self.read_weightings = tf.Variable(tf.zeros([batch_size, words_num, read_heads]), name='read_weightings', trainable=False)
 
-            self.read_vectors = tf.zeros([batch_size, word_size, read_heads])
+            self.read_vectors = tf.Variable(tf.zeros([batch_size, word_size, read_heads]), name='read_vectors', trainable=False)
 
             # a words_num x words_num identity matrix
             self.I = tf.constant(np.identity(words_num, dtype=np.float32))
-
-            # a variable used to bring the allocation weighting in order of memory words
-            # after computing them using the sorted usage and free list
-            self.ordered_allocation_weighting = tf.Variable(tf.zeros([batch_size * words_num]), trainable=False)
 
             # maps the indecies from the 2D array of free list per batch to
             # their corresponding values in the flat 1D array of ordered_allocation_weighting
@@ -92,7 +88,6 @@ class Memory:
 
         retention_vector = tf.reduce_prod(1 - self.read_weightings * free_gates, 2)
         updated_usage = (self.usage_vector + self.write_weighting - self.usage_vector * self.write_weighting)  * retention_vector
-        updated_usage = self.usage_vector.assign(updated_usage)
 
         return updated_usage
 
@@ -116,11 +111,14 @@ class Memory:
         unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
 
         mapped_free_list = free_list + self.index_mapper
+        ordered_allocation_weighting, name = utility.allocate(shape=[self.batch_size * self.words_num])
 
-        allocation_weighting = tf.scatter_update(self.ordered_allocation_weighting, mapped_free_list, unordered_allocation_weighting)
-        allocation_weighting = tf.reshape(allocation_weighting, (self.batch_size, self.words_num))
+        reorder = tf.scatter_update(ordered_allocation_weighting, mapped_free_list, unordered_allocation_weighting)
+        with tf.control_dependencies([reorder]):
+            flat_allocation_weighting = utility.read_and_deallocate(ordered_allocation_weighting, name)
+            allocation_weighting = tf.reshape(flat_allocation_weighting, (self.batch_size, self.words_num))
 
-        return allocation_weighting
+            return allocation_weighting
 
 
     def update_write_weighting(self, lookup_weighting, allocation_weighting, write_gate, allocation_gate):
@@ -146,7 +144,6 @@ class Memory:
         lookup_weighting = tf.squeeze(lookup_weighting)
 
         updated_write_weighting = write_gate * (allocation_gate * allocation_weighting + (1 - allocation_gate) * lookup_weighting)
-        updated_write_weighting = self.write_weighting.assign(updated_write_weighting)
 
         return updated_write_weighting
 
@@ -176,7 +173,7 @@ class Memory:
 
         erasing = self.memory_matrix * (1 - tf.batch_matmul(write_weighting, erase_vector))
         writing = tf.batch_matmul(write_weighting, write_vector)
-        updated_memory = self.memory_matrix.assign(erasing + writing)
+        updated_memory = erasing + writing
 
         return updated_memory
 
@@ -196,7 +193,6 @@ class Memory:
 
         reset_factor = 1 - tf.reduce_sum(write_weighting, 1, keep_dims=True)
         updated_precedence_vector = reset_factor * self.precedence_vector + write_weighting
-        updated_precedence_vector = self.precedence_vector.assign(updated_precedence_vector)
 
         return updated_precedence_vector
 
@@ -220,7 +216,6 @@ class Memory:
         reset_factor = 1 - utility.pairwise_add(write_weighting, is_batch=True)
         updated_link_matrix = reset_factor * self.link_matrix + tf.batch_matmul(write_weighting, precedence_vector)
         updated_link_matrix = (1 - self.I) * updated_link_matrix  # eliminates self-links
-        updated_link_matrix = self.link_matrix.assign(updated_link_matrix)
 
         return updated_link_matrix
 
@@ -266,8 +261,7 @@ class Memory:
         backward_mode = tf.expand_dims(read_mode[:, 0, :], 1) * backward_weighting
         lookup_mode = tf.expand_dims(read_mode[:, 1, :], 1) * lookup_weightings
         forward_mode = tf.expand_dims(read_mode[:, 2, :], 1) * forward_weighting
-
-        updated_read_weightings = self.read_weightings.assign(backward_mode + lookup_mode + forward_mode)
+        updated_read_weightings = backward_mode + lookup_mode + forward_mode
 
         return updated_read_weightings
 
@@ -287,7 +281,6 @@ class Memory:
         """
 
         updated_read_vectors = tf.batch_matmul(memory_matrix, read_weightings, adj_x=True)
-        updated_read_vectors = self.read_vectors.assign(updated_read_vectors)
 
         return updated_read_vectors
 
@@ -314,8 +307,10 @@ class Memory:
             specifications of what to erase from memory
 
         Returns : Tuple
+            the updated write_weighting: Tensor(batch_size, words_num)
             the updated memory_matrix: Tensor (batch_size, words_num, words_size)
             the updated link matrix: Tensor(batch_size, words_num, words_num)
+            the updated precedence vector: Tensor (batch_size, words_num)
         """
 
         lookup_weighting = self.get_lookup_weighting(key, strength)
@@ -328,9 +323,9 @@ class Memory:
         write_weighting = self.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
         memory_matrix = self.update_memory(write_weighting, write_vector, erase_vector)
         link_matrix = self.update_link_matrix(write_weighting)
-        self.update_precedence_vector(write_weighting)
+        precedence_vector = self.update_precedence_vector(write_weighting)
 
-        return memory_matrix, link_matrix
+        return write_weighting, memory_matrix, link_matrix, precedence_vector
 
 
     def read(self, keys, strengths, link_matrix, read_modes, memory_matrix):
@@ -350,8 +345,9 @@ class Memory:
         memory_matrix: Tensor (batch_size, words_num, word_size)
             the updated memory matrix from the last writing
 
-        Returns: Tensor (batch_size, word_size, read_heads)
-            the recently read vectors
+        Returns: Tuple
+            the updated read_weightings: Tensor(batch_size, words_num, read_heads)
+            the recently read vectors: Tensor (batch_size, word_size, read_heads)
         """
 
         lookup_weighting = self.get_lookup_weighting(keys, strengths)
@@ -359,4 +355,4 @@ class Memory:
         read_weightings = self.update_read_weightings(lookup_weighting, forward_weighting, backward_weighting, read_modes)
         read_vectors = self.update_read_vectors(memory_matrix, read_weightings)
 
-        return read_vectors
+        return read_weightings, read_vectors

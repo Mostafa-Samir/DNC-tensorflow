@@ -85,11 +85,11 @@ class DNCMemoryTests(unittest.TestCase):
                 session.run(tf.initialize_all_variables())
                 session.run(changes)
                 u = session.run(op)
-                updated_usage = session.run(mem.usage_vector.value())
+                #updated_usage = session.run(mem.usage_vector.value())
 
                 self.assertEqual(u.shape, (2, 4))
                 self.assertTrue(np.array_equal(u, predicted_usage))
-                self.assertTrue(np.array_equal(updated_usage, predicted_usage))
+                #self.assertTrue(np.array_equal(updated_usage, predicted_usage))
 
 
     def test_get_allocation_weighting(self):
@@ -132,11 +132,11 @@ class DNCMemoryTests(unittest.TestCase):
                 op = mem.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
                 session.run(tf.initialize_all_variables())
                 w_w = session.run(op)
-                updated_write_weighting = session.run(mem.write_weighting.value())
+                #updated_write_weighting = session.run(mem.write_weighting.value())
 
                 self.assertEqual(w_w.shape, (2,4))
                 self.assertTrue(np.allclose(w_w, predicted_weights))
-                self.assertTrue(np.allclose(updated_write_weighting, predicted_weights))
+                #self.assertTrue(np.allclose(updated_write_weighting, predicted_weights))
 
 
     def test_update_memory(self):
@@ -160,11 +160,11 @@ class DNCMemoryTests(unittest.TestCase):
                 session.run(tf.initialize_all_variables())
                 session.run(change)
                 M = session.run(op)
-                updated_memory = session.run(mem.memory_matrix.value())
+                #updated_memory = session.run(mem.memory_matrix.value())
 
                 self.assertEqual(M.shape, (2, 4, 5))
                 self.assertTrue(np.allclose(M, predicted))
-                self.assertTrue(np.allclose(updated_memory, predicted))
+                #self.assertTrue(np.allclose(updated_memory, predicted))
 
     def test_update_precedence_vector(self):
         graph = tf.Graph()
@@ -180,11 +180,11 @@ class DNCMemoryTests(unittest.TestCase):
                 session.run(tf.initialize_all_variables())
                 session.run(mem.precedence_vector.assign(initial_precedence))
                 p = session.run(op)
-                updated_precedence_vector = session.run(mem.precedence_vector.value())
+                #updated_precedence_vector = session.run(mem.precedence_vector.value())
 
                 self.assertEqual(p.shape, (2,4))
                 self.assertTrue(np.allclose(p, predicted))
-                self.assertTrue(np.allclose(updated_precedence_vector, predicted))
+                #self.assertTrue(np.allclose(updated_precedence_vector, predicted))
 
 
     def test_update_link_matrix(self):
@@ -219,10 +219,10 @@ class DNCMemoryTests(unittest.TestCase):
                 session.run(tf.initialize_all_variables())
                 session.run(changes)
                 L = session.run(op)
-                updated_link_matrix = session.run(mem.link_matrix.value())
+                #updated_link_matrix = session.run(mem.link_matrix.value())
 
                 self.assertTrue(np.allclose(L, predicted))
-                self.assertTrue(np.allclose(updated_link_matrix, predicted))
+                #self.assertTrue(np.allclose(updated_link_matrix, predicted))
 
 
     def test_get_directional_weightings(self):
@@ -271,10 +271,10 @@ class DNCMemoryTests(unittest.TestCase):
                 op = mem.update_read_weightings(lookup_weightings, forward_weighting, backward_weighting, read_mode)
                 session.run(tf.initialize_all_variables())
                 w_r = session.run(op)
-                updated_read_weightings = session.run(mem.read_weightings.value())
+                #updated_read_weightings = session.run(mem.read_weightings.value())
 
                 self.assertTrue(np.allclose(w_r, predicted_weights))
-                self.assertTrue(np.allclose(updated_read_weightings, predicted_weights))
+                #self.assertTrue(np.allclose(updated_read_weightings, predicted_weights))
 
 
     def test_update_read_vectors(self):
@@ -290,10 +290,10 @@ class DNCMemoryTests(unittest.TestCase):
                 op = mem.update_read_vectors(memory_matrix, read_weightings)
                 session.run(tf.initialize_all_variables())
                 r = session.run(op)
-                updated_read_vectors = session.run(mem.read_vectors.value())
+                #updated_read_vectors = session.run(mem.read_vectors.value())
 
                 self.assertTrue(np.allclose(r, predicted))
-                self.assertTrue(np.allclose(updated_read_vectors, predicted))
+                #self.assertTrue(np.allclose(updated_read_vectors, predicted))
 
     def test_write(self):
         graph = tf.Graph()
@@ -309,12 +309,14 @@ class DNCMemoryTests(unittest.TestCase):
                 write_vector = np.random.uniform(0, 1, (1, 5)).astype(np.float32)
                 erase_vector = np.zeros((1, 5)).astype(np.float32)
 
-                M_op, L_op = mem.write(key, strength, free_gates, allocation_gate, write_gate , write_vector, erase_vector)
+                ww_op, M_op, L_op, p_op = mem.write(key, strength, free_gates, allocation_gate, write_gate , write_vector, erase_vector)
                 session.run(tf.initialize_all_variables())
-                M, L = session.run([M_op, L_op])
+                ww, M, L, p = session.run([ww_op, M_op, L_op, p_op])
 
+                self.assertEqual(ww.shape, (1, 4))
                 self.assertEqual(M.shape, (1, 4, 5))
                 self.assertEqual(L.shape, (1, 4, 4))
+                self.assertEqual(p.shape, (1, 4))
 
 
 
@@ -329,10 +331,11 @@ class DNCMemoryTests(unittest.TestCase):
                 read_modes = random_softmax((1, 3, 2), axis=1).astype(np.float32)
                 memory_matrix = np.random.uniform(-1, 1, (1, 4, 5)).astype(np.float32)
 
-                op = mem.read(keys, strengths, link_matrix, read_modes, memory_matrix)
+                wr_op, r_op = mem.read(keys, strengths, link_matrix, read_modes, memory_matrix)
                 session.run(tf.initialize_all_variables())
-                r = session.run(op)
+                wr, r = session.run([wr_op, r_op])
 
+                self.assertEqual(wr.shape, (1, 4, 2))
                 self.assertEqual(r.shape, (1, 5, 2))
 
 
