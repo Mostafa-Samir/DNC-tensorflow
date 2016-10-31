@@ -309,10 +309,11 @@ class DNCMemoryTests(unittest.TestCase):
                 write_vector = np.random.uniform(0, 1, (1, 5)).astype(np.float32)
                 erase_vector = np.zeros((1, 5)).astype(np.float32)
 
-                ww_op, M_op, L_op, p_op = mem.write(key, strength, free_gates, allocation_gate, write_gate , write_vector, erase_vector)
+                u_op, ww_op, M_op, L_op, p_op = mem.write(key, strength, free_gates, allocation_gate, write_gate , write_vector, erase_vector)
                 session.run(tf.initialize_all_variables())
-                ww, M, L, p = session.run([ww_op, M_op, L_op, p_op])
+                u, ww, M, L, p = session.run([u_op, ww_op, M_op, L_op, p_op])
 
+                self.assertEqual(u.shape, (1, 4))
                 self.assertEqual(ww.shape, (1, 4))
                 self.assertEqual(M.shape, (1, 4, 5))
                 self.assertEqual(L.shape, (1, 4, 4))

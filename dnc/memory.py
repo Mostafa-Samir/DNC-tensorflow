@@ -307,6 +307,7 @@ class Memory:
             specifications of what to erase from memory
 
         Returns : Tuple
+            the updated usage vector: Tensor (batch_size, words_num)
             the updated write_weighting: Tensor(batch_size, words_num)
             the updated memory_matrix: Tensor (batch_size, words_num, words_size)
             the updated link matrix: Tensor(batch_size, words_num, words_num)
@@ -325,7 +326,7 @@ class Memory:
         link_matrix = self.update_link_matrix(write_weighting)
         precedence_vector = self.update_precedence_vector(write_weighting)
 
-        return write_weighting, memory_matrix, link_matrix, precedence_vector
+        return usage_vector, write_weighting, memory_matrix, link_matrix, precedence_vector
 
 
     def read(self, keys, strengths, link_matrix, read_modes, memory_matrix):
