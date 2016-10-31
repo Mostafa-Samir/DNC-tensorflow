@@ -72,12 +72,30 @@ class DNCTest(unittest.TestCase):
                     computer.sequence_length: 5
                 })
 
+                M, L, u, p, r, wr, ww = session.run([
+                    computer.memory.memory_matrix,
+                    computer.memory.link_matrix,
+                    computer.memory.usage_vector,
+                    computer.memory.precedence_vector,
+                    computer.memory.read_vectors,
+                    computer.memory.read_weightings,
+                    computer.memory.write_weighting
+                ])
+
                 self.assertEqual(out.shape, (3, 5, 20))
                 self.assertEqual(view['free_gates'].shape, (3, 5, 2))
                 self.assertEqual(view['allocation_gates'].shape, (3, 5, 1))
                 self.assertEqual(view['write_gates'].shape, (3, 5, 1))
                 self.assertEqual(view['read_weightings'].shape, (3, 5, 10, 2))
                 self.assertEqual(view['write_weightings'].shape, (3, 5, 10))
+
+                self.assertFalse(np.array_equal(M, np.zeros((3, 10, 64), dtype=np.float32)))
+                self.assertFalse(np.array_equal(L, np.zeros((3, 10, 10), dtype=np.float32)))
+                self.assertFalse(np.array_equal(u, np.zeros((3, 10), dtype=np.float32)))
+                self.assertFalse(np.array_equal(p, np.zeros((3, 10), dtype=np.float32)))
+                self.assertFalse(np.array_equal(r, np.zeros((3, 64, 2), dtype=np.float32)))
+                self.assertFalse(np.array_equal(wr, np.zeros((3, 10, 2), dtype=np.float32)))
+                self.assertFalse(np.array_equal(ww, np.zeros((3, 10), dtype=np.float32)))
 
 
     def test_save(self):
@@ -111,10 +129,13 @@ class DNCTest(unittest.TestCase):
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 2, batch_size=2)
                 session1.run(tf.initialize_all_variables())
 
-                model1_output, model1_memview = session1.run(computer.get_outputs(), feed_dict={
-                    computer.input_data: sample_input,
-                    computer.sequence_length: sample_seq_len
-                })
+                saved_weights = session1.run([
+                    computer.controller.nn_output_weights,
+                    computer.controller.interface_weights,
+                    computer.controller.mem_output_weights,
+                    computer.controller.W,
+                    computer.controller.b
+                ])
 
                 computer.save(session1, ckpts_dir, 'test-restore')
 
@@ -126,13 +147,15 @@ class DNCTest(unittest.TestCase):
                 session2.run(tf.initialize_all_variables())
                 computer.restore(session2, ckpts_dir, 'test-restore')
 
-                modelr_output, modelr_memview = session2.run(computer.get_outputs(), feed_dict={
-                    computer.input_data: sample_input,
-                    computer.sequence_length: sample_seq_len
-                })
+                restored_weights = session2.run([
+                    computer.controller.nn_output_weights,
+                    computer.controller.interface_weights,
+                    computer.controller.mem_output_weights,
+                    computer.controller.W,
+                    computer.controller.b
+                ])
 
-                self.assertTrue(np.product([np.allclose(model1_memview[key], modelr_memview[key]) for key in model1_memview]))
-                self.assertTrue(np.allclose(modelr_output, model1_output))
+                self.assertTrue(np.product([np.array_equal(restored_weights[i], saved_weights[i]) for i in range(5)]))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -66,7 +66,7 @@ class DNC:
         last_read_vectors = self.memory.read_vectors
         pre_output, interface = self.controller.process_input(step, last_read_vectors)
 
-        memory_matrix, link_matrix = self.memory.write(
+        usage_vector, write_weighting, memory_matrix, link_matrix, precedence_vector = self.memory.write(
             interface['write_key'],
             interface['write_strength'],
             interface['free_gates'],
@@ -76,7 +76,7 @@ class DNC:
             interface['erase_vector']
         )
 
-        new_read_vectors = self.memory.read(
+        read_weightings, read_vectors = self.memory.read(
             interface['read_keys'],
             interface['read_strengths'],
             link_matrix,
@@ -85,12 +85,20 @@ class DNC:
         )
 
         return [
-            self.controller.final_output(pre_output, new_read_vectors),
+
+            # report new memory state to be updated outside the condition branch
+            usage_vector,
+            write_weighting,
+            memory_matrix,
+            link_matrix,
+            precedence_vector,
+            read_weightings,
+            read_vectors,
+
+            self.controller.final_output(pre_output, read_vectors),
             interface['free_gates'],
             interface['allocation_gate'],
             interface['write_gate'],
-            self.memory.read_weightings,
-            self.memory.write_weighting
         ]
 
 
@@ -100,12 +108,20 @@ class DNC:
         """
 
         return [
+
+            # report the current memory state unchanged
+            self.memory.usage_vector,
+            self.memory.write_weighting,
+            self.memory.memory_matrix,
+            self.memory.link_matrix,
+            self.memory.precedence_vector,
+            self.memory.read_weightings,
+            self.memory.read_vectors,
+
             tf.zeros([self.batch_size, self.output_size]),
             tf.zeros([self.batch_size, self.read_heads]),
             tf.zeros([self.batch_size, 1]),
             tf.zeros([self.batch_size, 1]),
-            tf.zeros([self.batch_size, self.words_num, self.read_heads]),
-            tf.zeros([self.batch_size, self.words_num])
         ]
 
 
@@ -126,33 +142,46 @@ class DNC:
         write_gates = []
         read_weightings = []
         write_weightings = []
+        dependencies = [tf.no_op()]
 
         for t, step in enumerate(time_steps):
 
-            output_list = tf.cond(t < self.sequence_length,
-                # if step is within the sequence_length, perform regualr operations
-                lambda: self._step_op(step),
-                # otherwise: perform dummy operation
-                self._dummy_op
-            )
+            with tf.control_dependencies(dependencies):
+                output_list = tf.cond(t < self.sequence_length,
+                    # if step is within the sequence_length, perform regualr operations
+                    lambda: self._step_op(step),
+                    # otherwise: perform dummy operation
+                    self._dummy_op
+                )
 
-            outputs.append(output_list[0])
+                dependencies = [
+                    self.memory.usage_vector.assign(output_list[0]),
+                    self.memory.write_weighting.assign(output_list[1]),
+                    self.memory.memory_matrix.assign(output_list[2]),
+                    self.memory.link_matrix.assign(output_list[3]),
+                    self.memory.precedence_vector.assign(output_list[4]),
+                    self.memory.read_weightings.assign(output_list[5]),
+                    self.memory.read_vectors.assign(output_list[6]),
+                ]
 
-            # collecting memory view for the current step
-            free_gates.append(output_list[1])
-            allocation_gates.append(output_list[2])
-            write_gates.append(output_list[3])
-            read_weightings.append(output_list[4])
-            write_weightings.append(output_list[5])
+                outputs.append(output_list[7])
 
-        self.packed_output = tf.slice(tf.pack(outputs, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
-        self.packed_memory_view = {
-            'free_gates': tf.slice(tf.pack(free_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
-            'allocation_gates': tf.slice(tf.pack(allocation_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
-            'write_gates': tf.slice(tf.pack(write_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
-            'read_weightings': tf.slice(tf.pack(read_weightings, axis=1), [0, 0, 0, 0], [-1, self.sequence_length, -1, -1]),
-            'write_weightings': tf.slice(tf.pack(write_weightings, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
-        }
+                # collecting memory view for the current step
+                free_gates.append(output_list[8])
+                allocation_gates.append(output_list[9])
+                write_gates.append(output_list[10])
+                read_weightings.append(output_list[5])
+                write_weightings.append(output_list[1])
+
+        with tf.control_dependencies(dependencies):
+            self.packed_output = tf.slice(tf.pack(outputs, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
+            self.packed_memory_view = {
+                'free_gates': tf.slice(tf.pack(free_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
+                'allocation_gates': tf.slice(tf.pack(allocation_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
+                'write_gates': tf.slice(tf.pack(write_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
+                'read_weightings': tf.slice(tf.pack(read_weightings, axis=1), [0, 0, 0, 0], [-1, self.sequence_length, -1, -1]),
+                'write_weightings': tf.slice(tf.pack(write_weightings, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
+            }
 
 
     def get_outputs(self):
