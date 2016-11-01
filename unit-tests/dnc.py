@@ -16,6 +16,25 @@ class DummyController(BaseController):
     def network_op(self, X):
         return tf.matmul(X, self.W) + self.b
 
+class DummyRecurrentController(BaseController):
+    def network_vars(self):
+        self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(64)
+        self.state = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
+        self.output = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
+
+    def network_op(self, X):
+        X = tf.convert_to_tensor(X)
+
+        return self.lstm_cell(X, self.get_state())
+
+    def recurrent_update(self, new_state):
+        return tf.group(
+            self.output.assign(new_state[0]),
+            self.state.assign(new_state[1])
+        )
+
+    def get_state(self):
+        return (self.output, self.state)
 
 class DNCTest(unittest.TestCase):
 
@@ -46,6 +65,7 @@ class DNCTest(unittest.TestCase):
             with tf.Session(graph=graph) as session:
 
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 1)
+                rcomputer = DNC(DummyRecurrentController, 10, 20, 10, 10, 64, 1)
 
                 self.assertEqual(computer.input_size, 10)
                 self.assertEqual(computer.output_size, 20)
@@ -56,6 +76,7 @@ class DNCTest(unittest.TestCase):
 
                 self.assertTrue(isinstance(computer.memory, Memory))
                 self.assertTrue(isinstance(computer.controller, DummyController))
+                self.assertTrue(isinstance(rcomputer.controller, DummyRecurrentController))
 
 
     def test_call(self):
@@ -64,12 +85,18 @@ class DNCTest(unittest.TestCase):
             with tf.Session(graph=graph) as session:
 
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 2, batch_size=3)
+                rcomputer = DNC(DummyRecurrentController, 10, 20, 10, 10, 64, 2, batch_size=3)
                 input_batches = np.random.uniform(0, 1, (3, 5, 10)).astype(np.float32)
 
                 session.run(tf.initialize_all_variables())
                 out, view = session.run(computer.get_outputs(), feed_dict={
                     computer.input_data: input_batches,
                     computer.sequence_length: 5
+                })
+
+                rout, rview = session.run(rcomputer.get_outputs(), feed_dict={
+                    rcomputer.input_data: input_batches,
+                    rcomputer.sequence_length: 5
                 })
 
                 M, L, u, p, r, wr, ww = session.run([
@@ -80,6 +107,18 @@ class DNCTest(unittest.TestCase):
                     computer.memory.read_vectors,
                     computer.memory.read_weightings,
                     computer.memory.write_weighting
+                ])
+
+                rM, rL, ru, rp, rr, rwr, rww, ro, rs = session.run([
+                    rcomputer.memory.memory_matrix,
+                    rcomputer.memory.link_matrix,
+                    rcomputer.memory.usage_vector,
+                    rcomputer.memory.precedence_vector,
+                    rcomputer.memory.read_vectors,
+                    rcomputer.memory.read_weightings,
+                    rcomputer.memory.write_weighting,
+                    rcomputer.controller.get_state()[0],
+                    rcomputer.controller.get_state()[1]
                 ])
 
                 self.assertEqual(out.shape, (3, 5, 20))
@@ -96,6 +135,23 @@ class DNCTest(unittest.TestCase):
                 self.assertFalse(np.array_equal(r, np.zeros((3, 64, 2), dtype=np.float32)))
                 self.assertFalse(np.array_equal(wr, np.zeros((3, 10, 2), dtype=np.float32)))
                 self.assertFalse(np.array_equal(ww, np.zeros((3, 10), dtype=np.float32)))
+
+                self.assertEqual(rout.shape, (3, 5, 20))
+                self.assertEqual(rview['free_gates'].shape, (3, 5, 2))
+                self.assertEqual(rview['allocation_gates'].shape, (3, 5, 1))
+                self.assertEqual(rview['write_gates'].shape, (3, 5, 1))
+                self.assertEqual(rview['read_weightings'].shape, (3, 5, 10, 2))
+                self.assertEqual(rview['write_weightings'].shape, (3, 5, 10))
+
+                self.assertFalse(np.array_equal(rM, np.zeros((3, 10, 64), dtype=np.float32)))
+                self.assertFalse(np.array_equal(rL, np.zeros((3, 10, 10), dtype=np.float32)))
+                self.assertFalse(np.array_equal(ru, np.zeros((3, 10), dtype=np.float32)))
+                self.assertFalse(np.array_equal(rp, np.zeros((3, 10), dtype=np.float32)))
+                self.assertFalse(np.array_equal(rr, np.zeros((3, 64, 2), dtype=np.float32)))
+                self.assertFalse(np.array_equal(rwr, np.zeros((3, 10, 2), dtype=np.float32)))
+                self.assertFalse(np.array_equal(rww, np.zeros((3, 10), dtype=np.float32)))
+                self.assertFalse(np.array_equal(ro, np.zeros((3, 64), dtype=np.float32)))
+                self.assertFalse(np.array_equal(rs, np.zeros((3, 64), dtype=np.float32)))
 
 
     def test_save(self):

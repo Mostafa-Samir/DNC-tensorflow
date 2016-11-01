@@ -13,6 +13,27 @@ class DummyController(BaseController):
         return tf.matmul(X, self.W) + self.b
 
 
+class DummyRecurrentController(BaseController):
+    def network_vars(self):
+        self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(64)
+        self.state = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
+        self.output = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
+
+    def network_op(self, X):
+        X = tf.convert_to_tensor(X)
+
+        return self.lstm_cell(X, self.get_state())
+
+    def recurrent_update(self, new_state):
+        return tf.group(
+            self.output.assign(new_state[0]),
+            self.state.assign(new_state[1])
+        )
+
+    def get_state(self):
+        return (self.output, self.state)
+
+
 class DNCControllerTest(unittest.TestCase):
 
     def test_construction(self):
@@ -21,12 +42,22 @@ class DNCControllerTest(unittest.TestCase):
             with tf.Session(graph=graph) as session:
 
                 controller = DummyController(10, 10, 2, 5)
+                rcontroller = DummyRecurrentController(10, 10, 2, 5, 1)
 
+                self.assertFalse(controller.has_recurrent_nn)
                 self.assertEqual(controller.nn_input_size, 20)
                 self.assertEqual(controller.interface_vector_size, 38)
                 self.assertEqual(controller.interface_weights.get_shape().as_list(), [64, 38])
                 self.assertEqual(controller.nn_output_weights.get_shape().as_list(), [64, 10])
                 self.assertEqual(controller.mem_output_weights.get_shape().as_list(), [10, 10])
+
+                self.assertTrue(rcontroller.has_recurrent_nn)
+                self.assertEqual(rcontroller.nn_input_size, 20)
+                self.assertEqual(rcontroller.interface_vector_size, 38)
+                self.assertEqual(rcontroller.interface_weights.get_shape().as_list(), [64, 38])
+                self.assertEqual(rcontroller.nn_output_weights.get_shape().as_list(), [64, 10])
+                self.assertEqual(rcontroller.mem_output_weights.get_shape().as_list(), [10, 10])
+
 
 
     def test_get_nn_output_size(self):
@@ -35,8 +66,10 @@ class DNCControllerTest(unittest.TestCase):
             with tf.Session(graph=graph) as Session:
 
                 controller = DummyController(10, 10, 2, 5)
+                rcontroller = DummyRecurrentController(10, 10, 2, 5, 1)
 
                 self.assertEqual(controller.get_nn_output_size(), 64)
+                self.assertEqual(rcontroller.get_nn_output_size(), 64)
 
 
     def test_parse_interface_vector(self):
@@ -86,16 +119,24 @@ class DNCControllerTest(unittest.TestCase):
             with tf.Session(graph=graph) as session:
 
                 controller = DummyController(10, 10, 2, 5)
+                rcontroller = DummyRecurrentController(10, 10, 2, 5, 2)
+
                 input_batch = np.random.uniform(0, 1, (2, 10)).astype(np.float32)
                 last_read_vectors = np.random.uniform(-1, 1, (2, 5, 2)).astype(np.float32)
 
                 v_op, zeta_op = controller.process_input(input_batch, last_read_vectors)
+                rv_op, rzeta_op, rs_op = rcontroller.process_input(input_batch, last_read_vectors)
 
                 session.run(tf.initialize_all_variables())
                 v, zeta = session.run([v_op, zeta_op])
+                rv, rzeta, rs = session.run([rv_op, rzeta_op, rs_op])
 
                 self.assertEqual(v.shape, (2, 10))
                 self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in zeta.iteritems()], axis=1).shape, (2, 38))
+
+                self.assertEqual(rv.shape, (2, 10))
+                self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in rzeta.iteritems()], axis=1).shape, (2, 38))
+                self.assertEqual([_s.shape for _s in rs], [(2, 64), (2, 64)])
 
 
     def test_final_output(self):

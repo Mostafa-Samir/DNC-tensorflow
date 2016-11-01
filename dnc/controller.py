@@ -3,7 +3,7 @@ import numpy as np
 
 class BaseController:
 
-    def __init__(self, input_size, output_size, memory_read_heads, memory_word_size):
+    def __init__(self, input_size, output_size, memory_read_heads, memory_word_size, batch_size=1):
         """
         constructs a controller as described in the DNC paper:
         http://www.nature.com/nature/journal/vaop/ncurrent/full/nature20101.html
@@ -18,12 +18,21 @@ class BaseController:
             the number of read haeds in the associated external memory
         memory_word_size: int
             the size of the word in the associated external memory
+        batch_size: int
+            the size of the input data batch [optional, usually set by the DNC object]
         """
 
         self.input_size = input_size
         self.output_size = output_size
         self.read_heads = memory_read_heads
         self.word_size = memory_word_size
+        self.batch_size = batch_size
+
+        # indicates if the internal neural network is recurrent
+        # by the existence of recurrent_update and get_state methods
+        has_recurrent_update = callable(getattr(self, 'recurrent_update', None))
+        has_get_state = callable(getattr(self, 'get_state', None))
+        self.has_recurrent_nn =  has_recurrent_update and has_get_state
 
         # the actual size of the neural network input after flatenning and
         # concatenating the input vector with the previously read vctors from memory
@@ -35,7 +44,9 @@ class BaseController:
         with tf.name_scope("controller"):
             self.network_vars()
 
-            nn_output_size = self.get_nn_output_size()
+            nn_output_size = None
+            with tf.variable_scope("shape_inference"):
+                nn_output_size = self.get_nn_output_size()
 
             # defining internal weights of the controller
             self.interface_weights = tf.Variable(tf.truncated_normal([nn_output_size, self.interface_vector_size]), name='interface_weights')
@@ -75,8 +86,14 @@ class BaseController:
         Raises: ValueError
         """
 
-        input_vector =  np.zeros([1, self.nn_input_size], dtype=np.float32)
-        output_vector = self.network_op(input_vector)
+        input_vector =  np.zeros([self.batch_size, self.nn_input_size], dtype=np.float32)
+        output_vector = None
+
+        if self.has_recurrent_nn:
+            output_vector,_ = self.network_op(input_vector)
+        else:
+            output_vector = self.network_op(input_vector)
+
         shape = output_vector.get_shape().as_list()
 
         if len(shape) > 2:
@@ -157,14 +174,21 @@ class BaseController:
 
         flat_read_vectors = tf.reshape(last_read_vectors, (-1, self.word_size * self.read_heads))
         complete_input = tf.concat(1, [X, flat_read_vectors])
+        nn_output, nn_state = None, None
 
-        nn_output = self.network_op(complete_input)
+        if self.has_recurrent_nn:
+            nn_output, nn_state = self.network_op(complete_input)
+        else:
+            nn_output = self.network_op(complete_input)
 
         pre_output = tf.matmul(nn_output, self.nn_output_weights)
         interface = tf.matmul(nn_output, self.interface_weights)
         parsed_interface = self.parse_interface_vector(interface)
 
-        return pre_output, parsed_interface
+        if self.has_recurrent_nn:
+            return pre_output, parsed_interface, nn_state
+        else:
+            return pre_output, parsed_interface
 
 
     def final_output(self, pre_output, new_read_vectors):

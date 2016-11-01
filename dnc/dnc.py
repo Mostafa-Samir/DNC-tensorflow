@@ -39,7 +39,7 @@ class DNC:
         self.batch_size = batch_size
 
         self.memory = Memory(self.words_num, self.word_size, self.read_heads, self.batch_size)
-        self.controller = controller_class(self.input_size, self.output_size, self.read_heads, self.word_size)
+        self.controller = controller_class(self.input_size, self.output_size, self.read_heads, self.word_size, self.batch_size)
 
         # input data placeholders
         self.input_data = tf.placeholder(tf.float32, [batch_size, None, input_size], name='input')
@@ -64,7 +64,12 @@ class DNC:
         """
 
         last_read_vectors = self.memory.read_vectors
-        pre_output, interface = self.controller.process_input(step, last_read_vectors)
+        pre_output, interface, nn_state = None, None, None
+
+        if self.controller.has_recurrent_nn:
+            pre_output, interface, nn_state = self.controller.process_input(step, last_read_vectors)
+        else:
+            pre_output, interface = self.controller.process_input(step, last_read_vectors)
 
         usage_vector, write_weighting, memory_matrix, link_matrix, precedence_vector = self.memory.write(
             interface['write_key'],
@@ -99,6 +104,10 @@ class DNC:
             interface['free_gates'],
             interface['allocation_gate'],
             interface['write_gate'],
+
+            # report new state of RNN if exists
+            nn_state[0] if nn_state is not None else tf.zeros(1),
+            nn_state[1] if nn_state is not None else tf.zeros(1)
         ]
 
 
@@ -106,6 +115,11 @@ class DNC:
         """
         returns dummy outputs for padded, out of sequence inputs
         """
+
+        nn_state = None
+        if self.controller.has_recurrent_nn:
+            # get the current RNN state unchanged
+            nn_state = self.controller.get_state()
 
         return [
 
@@ -122,6 +136,10 @@ class DNC:
             tf.zeros([self.batch_size, self.read_heads]),
             tf.zeros([self.batch_size, 1]),
             tf.zeros([self.batch_size, 1]),
+
+            # report state of RNN if exists
+            nn_state[0] if nn_state is not None else tf.zeros(1),
+            nn_state[1] if nn_state is not None else tf.zeros(1)
         ]
 
 
@@ -144,34 +162,43 @@ class DNC:
         write_weightings = []
         dependencies = [tf.no_op()]
 
-        for t, step in enumerate(time_steps):
+        with tf.variable_scope("sequence_loop") as scope:
+            for t, step in enumerate(time_steps):
 
-            with tf.control_dependencies(dependencies):
-                output_list = tf.cond(t < self.sequence_length,
-                    # if step is within the sequence_length, perform regualr operations
-                    lambda: self._step_op(step),
-                    # otherwise: perform dummy operation
-                    self._dummy_op
-                )
+                with tf.control_dependencies(dependencies):
+                    output_list = tf.cond(t < self.sequence_length,
+                        # if step is within the sequence_length, perform regualr operations
+                        lambda: self._step_op(step),
+                        # otherwise: perform dummy operation
+                        self._dummy_op
+                    )
 
-                dependencies = [
-                    self.memory.usage_vector.assign(output_list[0]),
-                    self.memory.write_weighting.assign(output_list[1]),
-                    self.memory.memory_matrix.assign(output_list[2]),
-                    self.memory.link_matrix.assign(output_list[3]),
-                    self.memory.precedence_vector.assign(output_list[4]),
-                    self.memory.read_weightings.assign(output_list[5]),
-                    self.memory.read_vectors.assign(output_list[6]),
-                ]
+                    scope.reuse_variables()
 
-                outputs.append(output_list[7])
+                    dependencies = [
+                        self.memory.usage_vector.assign(output_list[0]),
+                        self.memory.write_weighting.assign(output_list[1]),
+                        self.memory.memory_matrix.assign(output_list[2]),
+                        self.memory.link_matrix.assign(output_list[3]),
+                        self.memory.precedence_vector.assign(output_list[4]),
+                        self.memory.read_weightings.assign(output_list[5]),
+                        self.memory.read_vectors.assign(output_list[6]),
+                    ]
 
-                # collecting memory view for the current step
-                free_gates.append(output_list[8])
-                allocation_gates.append(output_list[9])
-                write_gates.append(output_list[10])
-                read_weightings.append(output_list[5])
-                write_weightings.append(output_list[1])
+                    if self.controller.has_recurrent_nn:
+                        new_nn_state = (output_list[11], output_list[12])
+                        dependencies.append(
+                            self.controller.recurrent_update(new_nn_state)
+                        )
+
+                    outputs.append(output_list[7])
+
+                    # collecting memory view for the current step
+                    free_gates.append(output_list[8])
+                    allocation_gates.append(output_list[9])
+                    write_gates.append(output_list[10])
+                    read_weightings.append(output_list[5])
+                    write_weightings.append(output_list[1])
 
         with tf.control_dependencies(dependencies):
             self.packed_output = tf.slice(tf.pack(outputs, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
