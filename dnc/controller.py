@@ -48,10 +48,21 @@ class BaseController:
             with tf.variable_scope("shape_inference"):
                 nn_output_size = self.get_nn_output_size()
 
+            initial_std = lambda in_nodes: np.min(1e-4, np.sqrt(2.0 / in_nodes))
+
             # defining internal weights of the controller
-            self.interface_weights = tf.Variable(tf.truncated_normal([nn_output_size, self.interface_vector_size]), name='interface_weights')
-            self.nn_output_weights = tf.Variable(tf.truncated_normal([nn_output_size, self.output_size]), name='nn_output_weights')
-            self.mem_output_weights = tf.Variable(tf.truncated_normal([self.word_size * self.read_heads, self.output_size]), name='mem_output_weights')
+            self.interface_weights = tf.Variable(
+                tf.truncated_normal([nn_output_size, self.interface_vector_size], stddev=initial_std(nn_output_size)),
+                name='interface_weights'
+            )
+            self.nn_output_weights = tf.Variable(
+                tf.truncated_normal([nn_output_size, self.output_size], stddev=initial_std(nn_output_size)),
+                name='nn_output_weights'
+            )
+            self.mem_output_weights = tf.Variable(
+                tf.truncated_normal([self.word_size * self.read_heads, self.output_size],  stddev=initial_std(self.word_size * self.read_heads)),
+                name='mem_output_weights'
+            )
 
 
     def network_vars(self):
