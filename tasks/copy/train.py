@@ -125,18 +125,15 @@ if __name__ == '__main__':
                 summerize = (i % 100 == 0)
                 take_checkpoint = (i != 0) and (i % iterations == 0)
 
-                loss_value, _, grads, summary = session.run([
+                loss_value, _, summary = session.run([
                     loss,
                     apply_gradients,
-                    gradients,
                     summerize_op if summerize else no_summerize
                 ], feed_dict={
                     ncomputer.input_data: input_data,
                     ncomputer.target_output: target_output,
                     ncomputer.sequence_length: 2 * random_length + 1
                 })
-
-                print grads
 
                 last_100_losses.append(loss_value)
                 summerizer.add_summary(summary, i)
