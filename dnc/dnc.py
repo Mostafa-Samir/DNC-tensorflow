@@ -176,21 +176,18 @@ class DNC:
 
                     scope.reuse_variables()
 
-                    dependencies = [
-                        self.memory.usage_vector.assign(output_list[0]),
-                        self.memory.write_weighting.assign(output_list[1]),
-                        self.memory.memory_matrix.assign(output_list[2]),
-                        self.memory.link_matrix.assign(output_list[3]),
-                        self.memory.precedence_vector.assign(output_list[4]),
-                        self.memory.read_weightings.assign(output_list[5]),
-                        self.memory.read_vectors.assign(output_list[6]),
-                    ]
+                    # update memory parameters
+                    self.memory.usage_vector = output_list[0]
+                    self.memory.write_weighting = output_list[1]
+                    self.memory.memory_matrix = output_list[2]
+                    self.memory.link_matrix = output_list[3]
+                    self.memory.precedence_vector = output_list[4]
+                    self.memory.read_weightings = output_list[5]
+                    self.memory.read_vectors = output_list[6]
 
                     if self.controller.has_recurrent_nn:
                         new_nn_state = (output_list[11], output_list[12])
-                        dependencies.append(
-                            self.controller.recurrent_update(new_nn_state)
-                        )
+                        self.controller.recurrent_update(new_nn_state)
 
                     outputs.append(output_list[7])
 
@@ -200,6 +197,9 @@ class DNC:
                     write_gates.append(output_list[10])
                     read_weightings.append(output_list[5])
                     write_weightings.append(output_list[1])
+
+                    # just to make sure iterations run serially
+                    dependencies = [tf.identity(output_list[0])]
 
         with tf.control_dependencies(dependencies):
             self.packed_output = tf.slice(tf.pack(outputs, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])

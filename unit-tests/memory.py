@@ -23,17 +23,11 @@ class DNCMemoryTests(unittest.TestCase):
                 self.assertEqual(mem.read_heads, 2)
                 self.assertEqual(mem.batch_size, 2)
 
-                self.assertTrue(isinstance(mem.memory_matrix, tf.Variable))
                 self.assertEqual(mem.memory_matrix.get_shape().as_list(), [2, 4, 5])
-                self.assertTrue(isinstance(mem.usage_vector, tf.Variable))
                 self.assertEqual(mem.usage_vector.get_shape().as_list(), [2, 4])
-                self.assertTrue(isinstance(mem.link_matrix, tf.Variable))
                 self.assertEqual(mem.link_matrix.get_shape().as_list(), [2, 4, 4])
-                self.assertTrue(isinstance(mem.write_weighting, tf.Variable))
                 self.assertEqual(mem.write_weighting.get_shape().as_list(), [2, 4])
-                self.assertTrue(isinstance(mem.read_weightings, tf.Variable))
                 self.assertEqual(mem.read_weightings.get_shape().as_list(), [2, 4, 2])
-                self.assertTrue(isinstance(mem.read_vectors, tf.Variable))
                 self.assertEqual(mem.read_vectors.get_shape().as_list(), [2, 5, 2])
 
 
@@ -53,9 +47,8 @@ class DNCMemoryTests(unittest.TestCase):
                 sim = sim * strengths[:, np.newaxis, :]
                 predicted_wieghts = np.exp(sim) / np.sum(np.exp(sim), axis=1, keepdims=True)
 
+                mem.memory_matrix = tf.convert_to_tensor(initial_mem)
                 op = mem.get_lookup_weighting(keys, strengths)
-                session.run(tf.initialize_all_variables())
-                session.run(mem.memory_matrix.assign(initial_mem))
                 c = session.run(op)
 
                 self.assertEqual(c.shape, (2, 4, 2))
@@ -76,14 +69,12 @@ class DNCMemoryTests(unittest.TestCase):
                 psi = np.product(1 - init_read_weightings * free_gates[:, np.newaxis, :], axis=2)
                 predicted_usage = (init_usage + init_write_weightings - init_usage * init_write_weightings) * psi
 
-                changes = [
-                    mem.read_weightings.assign(init_read_weightings),
-                    mem.write_weighting.assign(init_write_weightings),
-                    mem.usage_vector.assign(init_usage)
-                ]
+
+                mem.read_weightings = tf.convert_to_tensor(init_read_weightings)
+                mem.write_weighting = tf.convert_to_tensor(init_write_weightings)
+                mem.usage_vector = tf.convert_to_tensor(init_usage)
+
                 op = mem.update_usage_vector(free_gates)
-                session.run(tf.initialize_all_variables())
-                session.run(changes)
                 u = session.run(op)
                 #updated_usage = session.run(mem.usage_vector.value())
 
@@ -109,7 +100,6 @@ class DNCMemoryTests(unittest.TestCase):
                         predicted_weights[i, free_list[i,j]] = (1 - mock_usage[i, free_list[i, j]]) * np.product(product_list)
 
                 op = mem.get_allocation_weighting(sorted_usage, free_list)
-                session.run(tf.initialize_all_variables())
                 a = session.run(op)
 
                 self.assertEqual(a.shape, (2, 4))
@@ -130,7 +120,6 @@ class DNCMemoryTests(unittest.TestCase):
                 predicted_weights = write_gate * (allocation_gate * allocation_weighting + (1 - allocation_gate) * np.squeeze(lookup_weighting))
 
                 op = mem.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
-                session.run(tf.initialize_all_variables())
                 w_w = session.run(op)
                 #updated_write_weighting = session.run(mem.write_weighting.value())
 
@@ -154,11 +143,9 @@ class DNCMemoryTests(unittest.TestCase):
                 v, e = write_vector[:, np.newaxis, :], erase_vector[:, np.newaxis, :]
                 predicted = memory_matrix * (1 - np.matmul(ww, e)) + np.matmul(ww, v)
 
-                change = mem.memory_matrix.assign(memory_matrix)
+                mem.memory_matrix = tf.convert_to_tensor(memory_matrix)
 
                 op = mem.update_memory(write_weighting, write_vector, erase_vector)
-                session.run(tf.initialize_all_variables())
-                session.run(change)
                 M = session.run(op)
                 #updated_memory = session.run(mem.memory_matrix.value())
 
@@ -176,9 +163,9 @@ class DNCMemoryTests(unittest.TestCase):
                 initial_precedence = random_softmax((2, 4), axis=1)
                 predicted = (1 - write_weighting.sum(axis=1, keepdims=True)) * initial_precedence + write_weighting
 
+                mem.precedence_vector = tf.convert_to_tensor(initial_precedence)
+
                 op = mem.update_precedence_vector(write_weighting)
-                session.run(tf.initialize_all_variables())
-                session.run(mem.precedence_vector.assign(initial_precedence))
                 p = session.run(op)
                 #updated_precedence_vector = session.run(mem.precedence_vector.value())
 
@@ -208,16 +195,12 @@ class DNCMemoryTests(unittest.TestCase):
                             reset_factor = (1 - _write_weighting[:,i] - _write_weighting[:,j])
                             predicted[:, i, j]  = reset_factor * initial_link[:, i , j] + _write_weighting[:, i] * _precedence_vector[:, j]
 
-                changes = [
-                    mem.link_matrix.assign(initial_link),
-                    mem.precedence_vector.assign(_precedence_vector)
-                ]
+                mem.link_matrix = tf.convert_to_tensor(initial_link)
+                mem.precedence_vector = tf.convert_to_tensor(_precedence_vector)
 
                 write_weighting = tf.constant(_write_weighting)
 
                 op = mem.update_link_matrix(write_weighting)
-                session.run(tf.initialize_all_variables())
-                session.run(changes)
                 L = session.run(op)
                 #updated_link_matrix = session.run(mem.link_matrix.value())
 
@@ -236,14 +219,10 @@ class DNCMemoryTests(unittest.TestCase):
                 predicted_forward = np.matmul(_link_matrix, _read_weightings)
                 predicted_backward = np.matmul(np.transpose(_link_matrix, [0, 2, 1]), _read_weightings)
 
-                changes = [
-                    mem.read_weightings.assign(_read_weightings)
-                ]
+                mem.read_weightings = tf.convert_to_tensor(_read_weightings)
 
                 fop, bop = mem.get_directional_weightings(_link_matrix)
 
-                session.run(tf.initialize_all_variables())
-                session.run(changes)
                 forward_weighting, backward_weighting = session.run([fop, bop])
 
                 self.assertTrue(np.allclose(forward_weighting, predicted_forward))

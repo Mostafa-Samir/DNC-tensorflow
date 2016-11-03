@@ -19,22 +19,17 @@ class DummyController(BaseController):
 class DummyRecurrentController(BaseController):
     def network_vars(self):
         self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(64)
-        self.state = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
-        self.output = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
+        self.state = self.lstm_cell.zero_state(self.batch_size, tf.float32)
 
     def network_op(self, X):
         X = tf.convert_to_tensor(X)
-
-        return self.lstm_cell(X, self.get_state())
+        return self.lstm_cell(X, self.state)
 
     def recurrent_update(self, new_state):
-        return tf.group(
-            self.output.assign(new_state[0]),
-            self.state.assign(new_state[1])
-        )
+        self.state = new_state
 
     def get_state(self):
-        return (self.output, self.state)
+        return self.state
 
 class DNCTest(unittest.TestCase):
 
@@ -89,17 +84,8 @@ class DNCTest(unittest.TestCase):
                 input_batches = np.random.uniform(0, 1, (3, 5, 10)).astype(np.float32)
 
                 session.run(tf.initialize_all_variables())
-                out, view = session.run(computer.get_outputs(), feed_dict={
-                    computer.input_data: input_batches,
-                    computer.sequence_length: 5
-                })
-
-                rout, rview = session.run(rcomputer.get_outputs(), feed_dict={
-                    rcomputer.input_data: input_batches,
-                    rcomputer.sequence_length: 5
-                })
-
-                M, L, u, p, r, wr, ww = session.run([
+                out_view, M, L, u, p, r, wr, ww = session.run([
+                    computer.get_outputs(),
                     computer.memory.memory_matrix,
                     computer.memory.link_matrix,
                     computer.memory.usage_vector,
@@ -107,9 +93,14 @@ class DNCTest(unittest.TestCase):
                     computer.memory.read_vectors,
                     computer.memory.read_weightings,
                     computer.memory.write_weighting
-                ])
+                ], feed_dict={
+                    computer.input_data: input_batches,
+                    computer.sequence_length: 5
+                })
+                out, view = out_view
 
-                rM, rL, ru, rp, rr, rwr, rww, ro, rs = session.run([
+                rout_rview, rM, rL, ru, rp, rr, rwr, rww, ro, rs = session.run([
+                    rcomputer.get_outputs(),
                     rcomputer.memory.memory_matrix,
                     rcomputer.memory.link_matrix,
                     rcomputer.memory.usage_vector,
@@ -119,7 +110,11 @@ class DNCTest(unittest.TestCase):
                     rcomputer.memory.write_weighting,
                     rcomputer.controller.get_state()[0],
                     rcomputer.controller.get_state()[1]
-                ])
+                ], feed_dict={
+                    rcomputer.input_data: input_batches,
+                    rcomputer.sequence_length: 5
+                })
+                rout, rview = rout_rview
 
                 self.assertEqual(out.shape, (3, 5, 20))
                 self.assertEqual(view['free_gates'].shape, (3, 5, 2))

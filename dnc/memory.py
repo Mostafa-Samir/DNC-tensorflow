@@ -30,23 +30,18 @@ class Memory:
 
         with tf.name_scope('external_memory'):
 
-            self.memory_matrix = tf.Variable(tf.zeros([batch_size, words_num, word_size]), name='memory_matrix', trainable=False)
-            self.usage_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='usage_vector', trainable=False)
-            self.precedence_vector = tf.Variable(tf.zeros([batch_size, words_num, ]), name='precedence_vector', trainable=False)
-            self.link_matrix = tf.Variable(tf.zeros([batch_size, words_num, words_num]), name='link_matrix', trainable=False)
+            self.memory_matrix = tf.zeros([batch_size, words_num, word_size])
+            self.usage_vector = tf.zeros([batch_size, words_num, ])
+            self.precedence_vector = tf.zeros([batch_size, words_num, ])
+            self.link_matrix = tf.zeros([batch_size, words_num, words_num])
 
-            self.write_weighting = tf.Variable(tf.zeros([batch_size, words_num, ]), name='write_weighting', trainable=False)
-            self.read_weightings = tf.Variable(tf.zeros([batch_size, words_num, read_heads]), name='read_weightings', trainable=False)
+            self.write_weighting = tf.zeros([batch_size, words_num, ])
+            self.read_weightings = tf.zeros([batch_size, words_num, read_heads])
 
-            self.read_vectors = tf.Variable(tf.zeros([batch_size, word_size, read_heads]), name='read_vectors', trainable=False)
+            self.read_vectors = tf.zeros([batch_size, word_size, read_heads])
 
             # a words_num x words_num identity matrix
             self.I = tf.constant(np.identity(words_num, dtype=np.float32))
-
-            # maps the indecies from the 2D array of free list per batch to
-            # their corresponding values in the flat 1D array of ordered_allocation_weighting
-            self.index_mapper = tf.constant(np.cumsum([0] + [words_num] * (batch_size - 1), dtype=np.int32)[:, np.newaxis])
-
 
 
     def get_lookup_weighting(self, keys, strengths):
