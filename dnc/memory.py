@@ -30,15 +30,15 @@ class Memory:
 
         with tf.name_scope('external_memory'):
 
-            self.memory_matrix = tf.zeros([batch_size, words_num, word_size])
-            self.usage_vector = tf.zeros([batch_size, words_num, ])
-            self.precedence_vector = tf.zeros([batch_size, words_num, ])
-            self.link_matrix = tf.zeros([batch_size, words_num, words_num])
+            self.memory_matrix = tf.fill([batch_size, words_num, word_size], 1e-6)
+            self.usage_vector = tf.fill([batch_size, words_num, ], 1e-6)
+            self.precedence_vector = tf.fill([batch_size, words_num, ], 1e-6)
+            self.link_matrix = tf.fill([batch_size, words_num, words_num], 1e-6)
 
-            self.write_weighting = tf.zeros([batch_size, words_num, ])
-            self.read_weightings = tf.zeros([batch_size, words_num, read_heads])
+            self.write_weighting = tf.fill([batch_size, words_num, ], 1e-6)
+            self.read_weightings = tf.fill([batch_size, words_num, read_heads], 1e-6)
 
-            self.read_vectors = tf.zeros([batch_size, word_size, read_heads])
+            self.read_vectors = tf.fill([batch_size, word_size, read_heads], 1e-6)
 
             # a words_num x words_num identity matrix
             self.I = tf.constant(np.identity(words_num, dtype=np.float32))
