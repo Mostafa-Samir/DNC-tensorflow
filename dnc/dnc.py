@@ -43,6 +43,7 @@ class DNC:
 
         # input data placeholders
         self.input_data = tf.placeholder(tf.float32, [batch_size, None, input_size], name='input')
+        self.target_output = tf.placeholder(tf.float32, [batch_size, None, output_size], name='targets')
         self.sequence_length = tf.placeholder(tf.int32, name='sequence_length')
 
         self.input_padding = tf.zeros([batch_size, max_sequence_length, input_size])
