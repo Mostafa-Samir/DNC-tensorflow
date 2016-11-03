@@ -110,15 +110,16 @@ class Memory:
         shifted_cumprod = tf.cumprod(sorted_usage, axis = 1, exclusive=True)
         unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
 
-        mapped_free_list = free_list + self.index_mapper
-        ordered_allocation_weighting, name = utility.allocate(shape=[self.batch_size * self.words_num])
+        allocation_weighting_batches = []
+        for b in range(self.batch_size):
+            allocation_weighting = tf.zeros([self.words_num])
+            unpacked_free_list = tf.unpack(free_list[b])
+            for pos, original_indx in enumerate(unpacked_free_list):
+                mask = tf.squeeze(tf.slice(self.I, [original_indx, 0], [1, -1]))
+                allocation_weighting += mask * unordered_allocation_weighting[b, pos]
+            allocation_weighting_batches.append(allocation_weighting)
 
-        reorder = tf.scatter_update(ordered_allocation_weighting, mapped_free_list, unordered_allocation_weighting)
-        with tf.control_dependencies([reorder]):
-            flat_allocation_weighting = utility.read_and_deallocate(ordered_allocation_weighting, name)
-            allocation_weighting = tf.reshape(flat_allocation_weighting, (self.batch_size, self.words_num))
-
-            return allocation_weighting
+        return tf.pack(allocation_weighting_batches)
 
 
     def update_write_weighting(self, lookup_weighting, allocation_weighting, write_gate, allocation_gate):
