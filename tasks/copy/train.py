@@ -43,8 +43,8 @@ if __name__ == '__main__':
 
     batch_size = 1
     input_size = output_size = 6
-    sequence_max_length = 10
-    words_count = 20
+    sequence_max_length = 20
+    words_count = 45
     word_size = 10
     read_heads = 1
 
