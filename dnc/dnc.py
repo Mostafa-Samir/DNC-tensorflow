@@ -161,6 +161,7 @@ class DNC:
         write_gates = []
         read_weightings = []
         write_weightings = []
+        usage_vectors = []
         dependencies = [tf.no_op()]
 
         with tf.variable_scope("sequence_loop") as scope:
@@ -197,6 +198,7 @@ class DNC:
                     write_gates.append(output_list[10])
                     read_weightings.append(output_list[5])
                     write_weightings.append(output_list[1])
+                    usage_vectors.append(output_list[0])
 
                     # just to make sure iterations run serially
                     dependencies = [tf.identity(output_list[0])]
@@ -208,7 +210,8 @@ class DNC:
                 'allocation_gates': tf.slice(tf.pack(allocation_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
                 'write_gates': tf.slice(tf.pack(write_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
                 'read_weightings': tf.slice(tf.pack(read_weightings, axis=1), [0, 0, 0, 0], [-1, self.sequence_length, -1, -1]),
-                'write_weightings': tf.slice(tf.pack(write_weightings, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
+                'write_weightings': tf.slice(tf.pack(write_weightings, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
+                'usage_vectors': tf.slice(tf.pack(usage_vectors, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
             }
 
 
