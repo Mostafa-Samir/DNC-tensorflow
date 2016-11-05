@@ -1,2 +1,8 @@
 # compiled python files
 *.pyc
+
+# tensorboard logs directories
+logs
+
+# IPython checkpoints directories
+.ipynb_checkpoints
