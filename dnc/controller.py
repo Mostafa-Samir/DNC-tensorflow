@@ -48,7 +48,7 @@ class BaseController:
             with tf.variable_scope("shape_inference"):
                 nn_output_size = self.get_nn_output_size()
 
-            initial_std = lambda in_nodes: np.min(1e-4, np.sqrt(2.0 / in_nodes))
+            initial_std = lambda in_nodes: np.min(1e-2, np.sqrt(2.0 / in_nodes))
 
             # defining internal weights of the controller
             self.interface_weights = tf.Variable(
