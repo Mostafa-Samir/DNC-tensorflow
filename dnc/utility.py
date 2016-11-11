@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.ops import gen_state_ops
 
 def pairwise_add(u, v=None, is_batch=False):
@@ -44,43 +45,16 @@ def pairwise_add(u, v=None, is_batch=False):
         return U + V
 
 
-def allocate(shape, dtype=tf.float32, name=None):
-    """
-    allocates a temporary variable with given shape, dtype,and name
+def decaying_softmax(shape, axis):
+    rank = len(shape)
+    max_val = shape[axis]
 
-    Parameters:
-    ----------
-    shape: iterable
-        the desired shape of the variable
-    dtype: tf.DType
-        the variable's data type
-    name: string
-        the name of the variable
+    weights_vector = np.arange(1, max_val + 1, dtype=np.float32)
+    weights_vector = weights_vector[::-1]
+    weights_vector = np.exp(weights_vector) / np.sum(np.exp(weights_vector))
 
-    Returns: Tuple
-        tf.Variable: the allocated variable,
-        string: the allocation op name (used for deallocating later)
-    """
+    container = np.zeros(shape, dtype=np.float32)
+    broadcastable_shape = [1] * rank
+    broadcastable_shape[axis] = max_val
 
-    var = gen_state_ops._temporary_variable(shape=shape, dtype=dtype)
-    var_name = var.op.name
-
-    return var, var_name
-
-
-def read_and_deallocate(var, var_name):
-    """
-    deallocates a previously allocted temporary variable and returns its value
-
-    Parameters:
-    ----------
-    var: tf.Variable
-        the previously allocated variable
-    var_name: string
-        the previously allocated variable allocation's op name
-
-    Returns: Tensor
-        the variable's value
-    """
-
-    return gen_state_ops._destroy_temporary_variable(var, var_name=var_name)
+    return container + np.reshape(weights_vector, broadcastable_shape)
