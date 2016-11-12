@@ -19,12 +19,9 @@ All experiments and tests ran on a machine with:
 
 ### Dynamic Memory Mechanisms
 
-This experiment is designed to demonstrate the various functionalities of the external memory access mechanisms, these are:
+This experiment is designed to demonstrate the various functionalities of the external memory access mechanisms such as in-order retrieval and allocation/deallocation.
 
-- Temporal Linking.
-- Memory allocation, freeing and re-use.
-
-A similar approach to that of the paper was followed by training a model with only 10 memory locations on a copy task in which a series of 4 random binary sequences each of which is of size 6 (24 piece of information) was presented as input. Details about the training can be found [here]().
+A similar approach to that of the paper was followed by training a model with only 10 memory locations on a copy task in which a series of 4 random binary sequences each of which is of size 6 (24 piece of information) was presented as input. Details about the training can be found [here](tasks/copy/).
 
 The model was able to learn to copy the input successfully, and it indeed learned to use the mentioned memory mechanisms. The following figure (which resembles **Extended Data Figure 1** in the paper) illustrates that.
 
@@ -32,7 +29,7 @@ The model was able to learn to copy the input successfully, and it indeed learne
 
 ![DNC-Memory-Mechanisms](/assets/DNC-dynamic-mem.png)
 
-- In the **Memory Locations** part of the figure, it's apparent that the model is able to read the memory locations in the same order they were written into. This demonstrates the models ability to utilize the link matrix and generate proper reading modes.
+- In the **Memory Locations** part of the figure, it's apparent that the model is able to read the memory locations in the same order they were written into.
 
 - In the **Free Gate** and the **Allocation Gate** portions of the figure, it's shown that the free gates are fully activated after a memory location is read and becomes obsolete, while being less activated in the writing phase. The opposite is true for the allocation gate. The **Memory Locations Usage** also demonstrates how memory locations are used, freed, and re-used again time after time.
 
@@ -44,7 +41,7 @@ This experiment was designed to check:
 - if the trained model has learned an implicit copying algorithm that can be generalized to larger input lengths.
 - if the learned model is independent of the training memory size and can be scaled-up with memories of larger sizes.
 
-To approach that, a model with 15 memory locations was trained on a copy problem in which a single sequence of random binary vectors of lengths between 1 and 10 was presented as input. Details of the training process can be found [here]().
+To approach that, a model with 15 memory locations was trained on a copy problem in which a single sequence of random binary vectors of lengths between 1 and 10 was presented as input. Details of the training process can be found [here](tasks/copy/).
 
 The model was then tested on pairs of increasing sequence lengths and increasing memory sizes with re-training on any of these pairs of parameters, and the fraction of correctly copied sequences out of a batch of 100 was recorded. The model was indeed able to generalize and use the available memory locations effectively without retraining. This is depicted in the following figure which resembles **Extended Data Figure 2** from the paper.
 
@@ -58,7 +55,7 @@ If you're interested in using the implementation for new tasks, you should first
 
 If you intend to work with the source code of the implementation itself, you should begin with looking at **[the data flow diagrams](docs/data-flow.md)** to get a high-level overview of how the data moves from the input to the output across the modules of the implementation. This would ease you into reading the source code, which is okay-documented.
 
-You might also find the **[implementation notes](doc/implementation-notes.md)** helpful to clarify how some of the math is implemented.
+You might also find the **[implementation notes](docs/implementation-notes.md)** helpful to clarify how some of the math is implemented.
 
 ## To-Do
 
