@@ -21,11 +21,11 @@ All experiments and tests ran on a machine with:
 
 This experiment is designed to demonstrate the various functionalities of the external memory access mechanisms such as in-order retrieval and allocation/deallocation.
 
-A similar approach to that of the paper was followed by training a model with only 10 memory locations on a copy task in which a series of 4 random binary sequences each of which is of size 6 (24 piece of information) was presented as input. Details about the training can be found [here](tasks/copy/).
+A similar approach to that of the paper was followed by training a 2-layer feedforward model with only 10 memory locations on a copy task in which a series of 4 random binary sequences each of which is of size 6 (24 piece of information) was presented as input. Details about the training can be found [here](tasks/copy/).
 
 The model was able to learn to copy the input successfully, and it indeed learned to use the mentioned memory mechanisms. The following figure (which resembles **Extended Data Figure 1** in the paper) illustrates that.
 
-*You can re-generate similar figures in the [visulaization notebook](tasks/copy/visualization.ipynb)*
+*You can re-generate similar figures in the [visualization notebook](tasks/copy/visualization.ipynb)*
 
 ![DNC-Memory-Mechanisms](/assets/DNC-dynamic-mem.png)
 
@@ -41,11 +41,11 @@ This experiment was designed to check:
 - if the trained model has learned an implicit copying algorithm that can be generalized to larger input lengths.
 - if the learned model is independent of the training memory size and can be scaled-up with memories of larger sizes.
 
-To approach that, a model with 15 memory locations was trained on a copy problem in which a single sequence of random binary vectors of lengths between 1 and 10 was presented as input. Details of the training process can be found [here](tasks/copy/).
+To approach that, a 2-layer feedforward model with 15 memory locations was trained on a copy problem in which a single sequence of random binary vectors of lengths between 1 and 10 was presented as input. Details of the training process can be found [here](tasks/copy/).
 
 The model was then tested on pairs of increasing sequence lengths and increasing memory sizes with re-training on any of these pairs of parameters, and the fraction of correctly copied sequences out of a batch of 100 was recorded. The model was indeed able to generalize and use the available memory locations effectively without retraining. This is depicted in the following figure which resembles **Extended Data Figure 2** from the paper.
 
-*Similar figures can be re-generated in the [visulaization notebook](tasks/copy/visualization.ipynb)*
+*Similar figures can be re-generated in the [visualization notebook](tasks/copy/visualization.ipynb)*
 
 ![DNC-Scalability](/assets/DNC-scalable.png)
 

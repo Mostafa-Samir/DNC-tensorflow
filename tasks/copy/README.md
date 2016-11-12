@@ -1,6 +1,6 @@
 ### Common Settings
 
-Both series and single training share the following set of hyperparameters:
+Both series and single models were trained on 2-layer feedforward controller (with hidden sizes 128 and 256 respectively) with ReLU activations, and both share the following set of hyperparameters:
 
 - RMSProp Optimizer with learning rate of 10⁻⁴, momentum of 0.9.
 - Memory word size of 10, with a single read head.
