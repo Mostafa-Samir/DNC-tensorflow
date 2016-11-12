@@ -14,6 +14,8 @@ is used. That is the mean of the logistic loss across the batch, time steps, and
 
 All gradients are clipped between -10 and 10.
 
+*Possible **NaNs** could occur during training!*
+
 
 ### Series Training
 
