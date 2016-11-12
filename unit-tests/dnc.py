@@ -19,17 +19,21 @@ class DummyController(BaseController):
 class DummyRecurrentController(BaseController):
     def network_vars(self):
         self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(64)
-        self.state = self.lstm_cell.zero_state(self.batch_size, tf.float32)
+        self.state = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
+        self.output = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
 
-    def network_op(self, X):
+    def network_op(self, X, state):
         X = tf.convert_to_tensor(X)
-        return self.lstm_cell(X, self.state)
+        return self.lstm_cell(X, state)
 
-    def recurrent_update(self, new_state):
-        self.state = new_state
+    def update_state(self, new_state):
+        return tf.group(
+            self.output.assign(new_state[0]),
+            self.state.assign(new_state[1])
+        )
 
     def get_state(self):
-        return self.state
+        return (self.output, self.state)
 
 class DNCTest(unittest.TestCase):
 

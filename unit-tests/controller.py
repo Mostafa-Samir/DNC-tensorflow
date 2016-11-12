@@ -19,12 +19,11 @@ class DummyRecurrentController(BaseController):
         self.state = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
         self.output = tf.Variable(tf.zeros([self.batch_size, 64]), trainable=False)
 
-    def network_op(self, X):
+    def network_op(self, X, state):
         X = tf.convert_to_tensor(X)
+        return self.lstm_cell(X, state)
 
-        return self.lstm_cell(X, self.get_state())
-
-    def recurrent_update(self, new_state):
+    def update_state(self, new_state):
         return tf.group(
             self.output.assign(new_state[0]),
             self.state.assign(new_state[1])
@@ -125,7 +124,7 @@ class DNCControllerTest(unittest.TestCase):
                 last_read_vectors = np.random.uniform(-1, 1, (2, 5, 2)).astype(np.float32)
 
                 v_op, zeta_op = controller.process_input(input_batch, last_read_vectors)
-                rv_op, rzeta_op, rs_op = rcontroller.process_input(input_batch, last_read_vectors)
+                rv_op, rzeta_op, rs_op = rcontroller.process_input(input_batch, last_read_vectors, rcontroller.get_state())
 
                 session.run(tf.initialize_all_variables())
                 v, zeta = session.run([v_op, zeta_op])

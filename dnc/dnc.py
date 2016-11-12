@@ -51,13 +51,15 @@ class DNC:
         self.build_graph()
 
 
-    def _step_op(self, step):
+    def _step_op(self, step, controller_state=None):
         """
         performs a step operation on the input step data
 
         Parameters:
         ----------
         step: Tensor (batch_size, input_size)
+        controller_state: Tuple
+            the state of the controller if it's recurrent
 
         Returns: Tuple
             output: Tensor (batch_size, output_size)
@@ -68,7 +70,7 @@ class DNC:
         pre_output, interface, nn_state = None, None, None
 
         if self.controller.has_recurrent_nn:
-            pre_output, interface, nn_state = self.controller.process_input(step, last_read_vectors)
+            pre_output, interface, nn_state = self.controller.process_input(step, last_read_vectors, controller_state)
         else:
             pre_output, interface = self.controller.process_input(step, last_read_vectors)
 
@@ -112,15 +114,10 @@ class DNC:
         ]
 
 
-    def _dummy_op(self):
+    def _dummy_op(self, controller_state=None):
         """
         returns dummy outputs for padded, out of sequence inputs
         """
-
-        nn_state = None
-        if self.controller.has_recurrent_nn:
-            # get the current RNN state unchanged
-            nn_state = self.controller.get_state()
 
         return [
 
@@ -139,8 +136,8 @@ class DNC:
             tf.zeros([self.batch_size, 1]),
 
             # report state of RNN if exists
-            nn_state[0] if nn_state is not None else tf.zeros(1),
-            nn_state[1] if nn_state is not None else tf.zeros(1)
+            controller_state[0] if controller_state is not None else tf.zeros(1),
+            controller_state[1] if controller_state is not None else tf.zeros(1)
         ]
 
 
@@ -164,15 +161,17 @@ class DNC:
         usage_vectors = []
         dependencies = [tf.no_op()]
 
+        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else None
+
         with tf.variable_scope("sequence_loop") as scope:
             for t, step in enumerate(time_steps):
 
                 with tf.control_dependencies(dependencies):
                     output_list = tf.cond(t < self.sequence_length,
                         # if step is within the sequence_length, perform regualr operations
-                        lambda: self._step_op(step),
+                        lambda: self._step_op(step, controller_state),
                         # otherwise: perform dummy operation
-                        self._dummy_op
+                        lambda: self._dummy_op(controller_state)
                     )
 
                     scope.reuse_variables()
@@ -187,8 +186,8 @@ class DNC:
                     self.memory.read_vectors = output_list[6]
 
                     if self.controller.has_recurrent_nn:
-                        new_nn_state = (output_list[11], output_list[12])
-                        self.controller.recurrent_update(new_nn_state)
+                        controller_state = (output_list[11], output_list[12])
+
 
                     outputs.append(output_list[7])
 
@@ -202,6 +201,9 @@ class DNC:
 
                     # just to make sure iterations run serially
                     dependencies = [tf.identity(output_list[0])]
+
+        if self.controller.has_recurrent_nn:            
+            dependencies.append(self.controller.update_state(controller_state))
 
         with tf.control_dependencies(dependencies):
             self.packed_output = tf.slice(tf.pack(outputs, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])

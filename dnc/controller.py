@@ -30,7 +30,7 @@ class BaseController:
 
         # indicates if the internal neural network is recurrent
         # by the existence of recurrent_update and get_state methods
-        has_recurrent_update = callable(getattr(self, 'recurrent_update', None))
+        has_recurrent_update = callable(getattr(self, 'update_state', None))
         has_get_state = callable(getattr(self, 'get_state', None))
         self.has_recurrent_nn =  has_recurrent_update and has_get_state
 
@@ -101,7 +101,7 @@ class BaseController:
         output_vector = None
 
         if self.has_recurrent_nn:
-            output_vector,_ = self.network_op(input_vector)
+            output_vector,_ = self.network_op(input_vector, self.get_state())
         else:
             output_vector = self.network_op(input_vector)
 
@@ -166,7 +166,7 @@ class BaseController:
 
         return parsed
 
-    def process_input(self, X, last_read_vectors):
+    def process_input(self, X, last_read_vectors, state=None):
         """
         processes input data through the controller network and returns the
         pre-output and interface_vector
@@ -177,6 +177,8 @@ class BaseController:
             the input data batch
         last_read_vectors: (batch_size, word_size, read_heads)
             the last batch of read vectors from memory
+        state: Tuple
+            state vectors if the network is recurrent
 
         Returns: Tuple
             pre-output: Tensor (batch_size, output_size)
@@ -188,7 +190,7 @@ class BaseController:
         nn_output, nn_state = None, None
 
         if self.has_recurrent_nn:
-            nn_output, nn_state = self.network_op(complete_input)
+            nn_output, nn_state = self.network_op(complete_input, state)
         else:
             nn_output = self.network_op(complete_input)
 
