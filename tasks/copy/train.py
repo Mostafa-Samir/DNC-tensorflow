@@ -43,8 +43,8 @@ if __name__ == '__main__':
 
     batch_size = 1
     input_size = output_size = 6
-    sequence_max_length = 20
-    words_count = 45
+    sequence_max_length = 10
+    words_count = 15
     word_size = 10
     read_heads = 1
 
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         if opt[0] == '--checkpoint':
             from_checkpoint = opt[1]
         elif opt[0] == '--iterations':
-            iterations = opt[1]
+            iterations = int(opt[1])
 
     graph = tf.Graph()
 
