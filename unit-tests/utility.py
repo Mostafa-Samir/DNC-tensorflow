@@ -52,36 +52,5 @@ class DNCUtilityTests(unittest.TestCase):
                 self.assertTrue(np.allclose(UV, predicted_UV))
 
 
-    def test_allocate(self):
-        graph = tf.Graph()
-        with graph.as_default():
-            with tf.Session(graph=graph) as session:
-
-                var, var_name = util.allocate([4])
-                indecies = np.array([0, 1, 2, 3])
-                updates = np.array([7, 8, 9, 10], dtype=np.float32)
-
-                update = tf.scatter_update(var, indecies, updates)
-                val = session.run(update)
-
-                self.assertTrue(np.allclose(val, updates))
-
-
-    def test_read_and_deallocate(self):
-        graph = tf.Graph()
-        with graph.as_default():
-            with tf.Session(graph=graph) as session:
-
-                var, var_name = util.allocate([4])
-                indecies = np.array([0, 1, 2, 3])
-                updates = np.array([7, 8, 9, 10], dtype=np.float32)
-
-                update_op = tf.scatter_update(var, indecies, updates)
-                with tf.control_dependencies([update_op]):
-                    da_op = util.read_and_deallocate(var, var_name)
-
-                    val = session.run(da_op)
-                    self.assertTrue(np.allclose(val, updates))
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)
