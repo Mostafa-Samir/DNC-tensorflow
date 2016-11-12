@@ -25,7 +25,7 @@ A similar approach to that of the paper was followed by training a model with on
 
 The model was able to learn to copy the input successfully, and it indeed learned to use the mentioned memory mechanisms. The following figure (which resembles **Extended Data Figure 1** in the paper) illustrates that.
 
-*You can re-generate similar figures in the [visulaization notebook](tasks/copy/visulaization.ipynb)*
+*You can re-generate similar figures in the [visulaization notebook](tasks/copy/visualization.ipynb)*
 
 ![DNC-Memory-Mechanisms](/assets/DNC-dynamic-mem.png)
 
@@ -45,7 +45,7 @@ To approach that, a model with 15 memory locations was trained on a copy problem
 
 The model was then tested on pairs of increasing sequence lengths and increasing memory sizes with re-training on any of these pairs of parameters, and the fraction of correctly copied sequences out of a batch of 100 was recorded. The model was indeed able to generalize and use the available memory locations effectively without retraining. This is depicted in the following figure which resembles **Extended Data Figure 2** from the paper.
 
-*Similar figures can be re-generated in the [visulaization notebook](tasks/copy/visulaization.ipynb)*
+*Similar figures can be re-generated in the [visulaization notebook](tasks/copy/visualization.ipynb)*
 
 ![DNC-Scalability](/assets/DNC-scalable.png)
 

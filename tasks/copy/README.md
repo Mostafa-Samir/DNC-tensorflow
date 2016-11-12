@@ -14,7 +14,7 @@ is used. That is the mean of the logistic loss across the batch, time steps, and
 
 All gradients are clipped between -10 and 10.
 
-*Possible **NaNs** could occur during training!*
+*Possible __NaNs__ could occur during training!*
 
 
 ### Series Training
@@ -27,7 +27,7 @@ The following plots show the learning curves for the length-2 and length-4 model
 
 ![series-4](/assets/model-series-4-curve.png)
 
-*Attempting to train a length-4 model directly always resulted in **NaNs**. The paper mentioned using curriculum learning for the graph and mini-SHRDLU tasks, but it did not mention any thing about the copy task, so there's a possibility that this is not the most efficient method.*
+*Attempting to train a length-4 model directly always resulted in __NaNs__. The paper mentioned using curriculum learning for the graph and mini-SHRDLU tasks, but it did not mention any thing about the copy task, so there's a possibility that this is not the most efficient method.*
 
 #### Retraining
 ```
