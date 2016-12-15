@@ -89,17 +89,19 @@ if __name__ == '__main__':
 
             loss = binary_cross_entropy(squashed_output, ncomputer.target_output)
 
+            summeries = []
+
             gradients = optimizer.compute_gradients(loss)
             for i, (grad, var) in enumerate(gradients):
                 if grad is not None:
-                    #with tf.control_dependencies([tf.Print(tf.zeros(1), [var.name, tf.is_nan(grad)])]):
+                    summeries.append(tf.histogram_summary(var.name + '/grad', grad))
                     gradients[i] = (tf.clip_by_value(grad, -10, 10), var)
 
             apply_gradients = optimizer.apply_gradients(gradients)
 
-            summerize_loss = tf.scalar_summary("Loss", loss)
+            summeries.append(tf.scalar_summary("Loss", loss))
 
-            summerize_op = tf.merge_summary([summerize_loss])
+            summerize_op = tf.merge_summary(summeries)
             no_summerize = tf.no_op()
 
             llprint("Done!\n")
