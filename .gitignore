@@ -6,3 +6,6 @@ logs
 
 # IPython checkpoints directories
 .ipynb_checkpoints
+
+# bAbI task data
+tasks/babi/data
