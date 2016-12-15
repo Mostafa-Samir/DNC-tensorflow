@@ -52,13 +52,15 @@ class DNC:
         self.build_graph()
 
 
-    def _step_op(self, step, controller_state=None):
+    def _step_op(self, step, memory_state, controller_state=None):
         """
         performs a step operation on the input step data
 
         Parameters:
         ----------
         step: Tensor (batch_size, input_size)
+        memory_state: Tuple
+            a tuple of current memory parameters
         controller_state: Tuple
             the state of the controller if it's recurrent
 
@@ -67,7 +69,7 @@ class DNC:
             memory_view: dict
         """
 
-        last_read_vectors = self.memory.read_vectors
+        last_read_vectors = memory_state[6]
         pre_output, interface, nn_state = None, None, None
 
         if self.controller.has_recurrent_nn:
@@ -76,6 +78,8 @@ class DNC:
             pre_output, interface = self.controller.process_input(step, last_read_vectors)
 
         usage_vector, write_weighting, memory_matrix, link_matrix, precedence_vector = self.memory.write(
+            memory_state[0], memory_state[1], memory_state[5],
+            memory_state[4], memory_state[2], memory_state[3],
             interface['write_key'],
             interface['write_strength'],
             interface['free_gates'],
@@ -86,21 +90,22 @@ class DNC:
         )
 
         read_weightings, read_vectors = self.memory.read(
+            memory_matrix,
+            memory_state[5],
             interface['read_keys'],
             interface['read_strengths'],
             link_matrix,
             interface['read_modes'],
-            memory_matrix
         )
 
         return [
 
             # report new memory state to be updated outside the condition branch
-            usage_vector,
-            write_weighting,
             memory_matrix,
-            link_matrix,
+            usage_vector,
             precedence_vector,
+            link_matrix,
+            write_weighting,
             read_weightings,
             read_vectors,
 
@@ -142,7 +147,7 @@ class DNC:
         ]
 
 
-    def _loop_body(self, time, outputs, free_gates, allocation_gates, write_gates,
+    def _loop_body(self, time, memory_state, outputs, free_gates, allocation_gates, write_gates,
                    read_weightings, write_weightings, usage_vectors, controller_state):
         """
         the body of the DNC sequence processing loop
@@ -151,6 +156,7 @@ class DNC:
         ----------
         time: Tensor
         outputs: TensorArray
+        memory_state: Tuple
         free_gates: TensorArray
         allocation_gates: TensorArray
         write_gates: TensorArray
@@ -164,19 +170,15 @@ class DNC:
 
         step_input = self.unpacked_input_data.read(time)
 
-        output_list = self._step_op(step_input, controller_state)
+        output_list = self._step_op(step_input, memory_state, controller_state)
 
         # update memory parameters
-        self.memory.usage_vector = tf.Print(output_list[0], [0])
-        self.memory.write_weighting = output_list[1]
-        self.memory.memory_matrix = output_list[2]
-        self.memory.link_matrix = output_list[3]
-        self.memory.precedence_vector = output_list[4]
-        self.memory.read_weightings = output_list[5]
-        self.memory.read_vectors = output_list[6]
+
+        new_controller_state = tf.zeros(1)
+        new_memory_state = tuple(output_list[0:7])
 
         if self.controller.has_recurrent_nn:
-            controller_state = (output_list[11], output_list[12])
+            new_controller_state = (output_list[11], output_list[12])
 
         outputs = outputs.write(time, output_list[7])
 
@@ -185,14 +187,14 @@ class DNC:
         allocation_gates = allocation_gates.write(time, output_list[9])
         write_gates = write_gates.write(time, output_list[10])
         read_weightings = read_weightings.write(time, output_list[5])
-        write_weightings = write_weightings.write(time, output_list[1])
-        usage_vectors = usage_vectors.write(time, output_list[0])
+        write_weightings = write_weightings.write(time, output_list[4])
+        usage_vectors = usage_vectors.write(time, output_list[1])
 
         return (
-            time + 1, outputs, free_gates,
-            allocation_gates, write_gates,
+            time + 1, new_memory_state, outputs,
+            free_gates,allocation_gates, write_gates,
             read_weightings, write_weightings,
-            usage_vectors, controller_state
+            usage_vectors, new_controller_state
         )
 
 
@@ -213,6 +215,7 @@ class DNC:
         usage_vectors = tf.TensorArray(tf.float32, self.sequence_length)
 
         controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else tf.zeros(1)
+        memory_state = self.memory.init_memory()
         final_results = None
 
         with tf.variable_scope("sequence_loop") as scope:
@@ -222,8 +225,8 @@ class DNC:
                 cond=lambda time, *_: time < self.sequence_length,
                 body=self._loop_body,
                 loop_vars=(
-                    time, outputs, free_gates,
-                    allocation_gates, write_gates,
+                    time, memory_state, outputs,
+                    free_gates, allocation_gates, write_gates,
                     read_weightings, write_weightings,
                     usage_vectors, controller_state
                 ),
@@ -233,17 +236,17 @@ class DNC:
 
         dependencies = []
         if self.controller.has_recurrent_nn:
-            dependencies.append(self.controller.update_state(final_results[8]))
+            dependencies.append(self.controller.update_state(final_results[9]))
 
         with tf.control_dependencies(dependencies):
-            self.packed_output = utility.pack_into_tensor(final_results[1], axis=1)
+            self.packed_output = utility.pack_into_tensor(final_results[2], axis=1)
             self.packed_memory_view = {
-                'free_gates': utility.pack_into_tensor(final_results[2], axis=1),
-                'allocation_gates': utility.pack_into_tensor(final_results[3], axis=1),
-                'write_gates': utility.pack_into_tensor(final_results[4], axis=1),
-                'read_weightings': utility.pack_into_tensor(final_results[5], axis=1),
-                'write_weightings': utility.pack_into_tensor(final_results[6], axis=1),
-                'usage_vectors': utility.pack_into_tensor(final_results[7], axis=1)
+                'free_gates': utility.pack_into_tensor(final_results[3], axis=1),
+                'allocation_gates': utility.pack_into_tensor(final_results[4], axis=1),
+                'write_gates': utility.pack_into_tensor(final_results[5], axis=1),
+                'read_weightings': utility.pack_into_tensor(final_results[6], axis=1),
+                'write_weightings': utility.pack_into_tensor(final_results[7], axis=1),
+                'usage_vectors': utility.pack_into_tensor(final_results[8], axis=1)
             }
 
 
