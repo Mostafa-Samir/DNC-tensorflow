@@ -88,30 +88,14 @@ class DNCTest(unittest.TestCase):
                 input_batches = np.random.uniform(0, 1, (3, 5, 10)).astype(np.float32)
 
                 session.run(tf.initialize_all_variables())
-                out_view, M, L, u, p, r, wr, ww = session.run([
-                    computer.get_outputs(),
-                    computer.memory.memory_matrix,
-                    computer.memory.link_matrix,
-                    computer.memory.usage_vector,
-                    computer.memory.precedence_vector,
-                    computer.memory.read_vectors,
-                    computer.memory.read_weightings,
-                    computer.memory.write_weighting
-                ], feed_dict={
+                out_view = session.run(computer.get_outputs(), feed_dict={
                     computer.input_data: input_batches,
                     computer.sequence_length: 5
                 })
                 out, view = out_view
 
-                rout_rview, rM, rL, ru, rp, rr, rwr, rww, ro, rs = session.run([
+                rout_rview, ro, rs = session.run([
                     rcomputer.get_outputs(),
-                    rcomputer.memory.memory_matrix,
-                    rcomputer.memory.link_matrix,
-                    rcomputer.memory.usage_vector,
-                    rcomputer.memory.precedence_vector,
-                    rcomputer.memory.read_vectors,
-                    rcomputer.memory.read_weightings,
-                    rcomputer.memory.write_weighting,
                     rcomputer.controller.get_state()[0],
                     rcomputer.controller.get_state()[1]
                 ], feed_dict={
@@ -127,13 +111,6 @@ class DNCTest(unittest.TestCase):
                 self.assertEqual(view['read_weightings'].shape, (3, 5, 10, 2))
                 self.assertEqual(view['write_weightings'].shape, (3, 5, 10))
 
-                self.assertFalse(np.array_equal(M, np.zeros((3, 10, 64), dtype=np.float32)))
-                self.assertFalse(np.array_equal(L, np.zeros((3, 10, 10), dtype=np.float32)))
-                self.assertFalse(np.array_equal(u, np.zeros((3, 10), dtype=np.float32)))
-                self.assertFalse(np.array_equal(p, np.zeros((3, 10), dtype=np.float32)))
-                self.assertFalse(np.array_equal(r, np.zeros((3, 64, 2), dtype=np.float32)))
-                self.assertFalse(np.array_equal(wr, np.zeros((3, 10, 2), dtype=np.float32)))
-                self.assertFalse(np.array_equal(ww, np.zeros((3, 10), dtype=np.float32)))
 
                 self.assertEqual(rout.shape, (3, 5, 20))
                 self.assertEqual(rview['free_gates'].shape, (3, 5, 2))
@@ -141,16 +118,6 @@ class DNCTest(unittest.TestCase):
                 self.assertEqual(rview['write_gates'].shape, (3, 5, 1))
                 self.assertEqual(rview['read_weightings'].shape, (3, 5, 10, 2))
                 self.assertEqual(rview['write_weightings'].shape, (3, 5, 10))
-
-                self.assertFalse(np.array_equal(rM, np.zeros((3, 10, 64), dtype=np.float32)))
-                self.assertFalse(np.array_equal(rL, np.zeros((3, 10, 10), dtype=np.float32)))
-                self.assertFalse(np.array_equal(ru, np.zeros((3, 10), dtype=np.float32)))
-                self.assertFalse(np.array_equal(rp, np.zeros((3, 10), dtype=np.float32)))
-                self.assertFalse(np.array_equal(rr, np.zeros((3, 64, 2), dtype=np.float32)))
-                self.assertFalse(np.array_equal(rwr, np.zeros((3, 10, 2), dtype=np.float32)))
-                self.assertFalse(np.array_equal(rww, np.zeros((3, 10), dtype=np.float32)))
-                self.assertFalse(np.array_equal(ro, np.zeros((3, 64), dtype=np.float32)))
-                self.assertFalse(np.array_equal(rs, np.zeros((3, 64), dtype=np.float32)))
 
 
     def test_save(self):

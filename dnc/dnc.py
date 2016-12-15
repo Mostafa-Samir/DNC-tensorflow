@@ -1,5 +1,6 @@
 import tensorflow as tf
 from memory import Memory
+import utility
 import os
 
 class DNC:
@@ -141,79 +142,108 @@ class DNC:
         ]
 
 
+    def _loop_body(self, time, outputs, free_gates, allocation_gates, write_gates,
+                   read_weightings, write_weightings, usage_vectors, controller_state):
+        """
+        the body of the DNC sequence processing loop
+
+        Parameters:
+        ----------
+        time: Tensor
+        outputs: TensorArray
+        free_gates: TensorArray
+        allocation_gates: TensorArray
+        write_gates: TensorArray
+        read_weightings: TensorArray,
+        write_weightings: TensorArray,
+        usage_vectors: TensorArray,
+        controller_state: Tuple
+
+        Returns: Tuple containing all updated arguments
+        """
+
+        step_input = self.unpacked_input_data.read(time)
+
+        output_list = self._step_op(step_input, controller_state)
+
+        # update memory parameters
+        self.memory.usage_vector = tf.Print(output_list[0], [0])
+        self.memory.write_weighting = output_list[1]
+        self.memory.memory_matrix = output_list[2]
+        self.memory.link_matrix = output_list[3]
+        self.memory.precedence_vector = output_list[4]
+        self.memory.read_weightings = output_list[5]
+        self.memory.read_vectors = output_list[6]
+
+        if self.controller.has_recurrent_nn:
+            controller_state = (output_list[11], output_list[12])
+
+        outputs = outputs.write(time, output_list[7])
+
+        # collecting memory view for the current step
+        free_gates = free_gates.write(time, output_list[8])
+        allocation_gates = allocation_gates.write(time, output_list[9])
+        write_gates = write_gates.write(time, output_list[10])
+        read_weightings = read_weightings.write(time, output_list[5])
+        write_weightings = write_weightings.write(time, output_list[1])
+        usage_vectors = usage_vectors.write(time, output_list[0])
+
+        return (
+            time + 1, outputs, free_gates,
+            allocation_gates, write_gates,
+            read_weightings, write_weightings,
+            usage_vectors, controller_state
+        )
+
+
     def build_graph(self):
         """
         builds the computational graph that performs a step-by-step evaluation
         of the input data batches
         """
 
-        padding = tf.slice(self.input_padding, [0, self.sequence_length, 0], [-1, -1, -1])
-        data = tf.concat(1, [self.input_data, padding])
+        self.unpacked_input_data = utility.unpack_into_tensorarray(self.input_data, 1, self.sequence_length)
 
-        time_steps = tf.unpack(data, num=self.max_sequence_length, axis=1)
+        outputs = tf.TensorArray(tf.float32, self.sequence_length)
+        free_gates = tf.TensorArray(tf.float32, self.sequence_length)
+        allocation_gates = tf.TensorArray(tf.float32, self.sequence_length)
+        write_gates = tf.TensorArray(tf.float32, self.sequence_length)
+        read_weightings = tf.TensorArray(tf.float32, self.sequence_length)
+        write_weightings = tf.TensorArray(tf.float32, self.sequence_length)
+        usage_vectors = tf.TensorArray(tf.float32, self.sequence_length)
 
-        outputs = []
-        free_gates = []
-        allocation_gates = []
-        write_gates = []
-        read_weightings = []
-        write_weightings = []
-        usage_vectors = []
-        dependencies = [tf.no_op()]
-
-        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else None
+        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else tf.zeros(1)
+        final_results = None
 
         with tf.variable_scope("sequence_loop") as scope:
-            for t, step in enumerate(time_steps):
+            time = tf.constant(0, dtype=tf.int32)
 
-                with tf.control_dependencies(dependencies):
-                    output_list = tf.cond(t < self.sequence_length,
-                        # if step is within the sequence_length, perform regualr operations
-                        lambda: self._step_op(step, controller_state),
-                        # otherwise: perform dummy operation
-                        lambda: self._dummy_op(controller_state)
-                    )
+            final_results = tf.while_loop(
+                cond=lambda time, *_: time < self.sequence_length,
+                body=self._loop_body,
+                loop_vars=(
+                    time, outputs, free_gates,
+                    allocation_gates, write_gates,
+                    read_weightings, write_weightings,
+                    usage_vectors, controller_state
+                ),
+                parallel_iterations=1,
+                swap_memory=True
+            )
 
-                    scope.reuse_variables()
-
-                    # update memory parameters
-                    self.memory.usage_vector = output_list[0]
-                    self.memory.write_weighting = output_list[1]
-                    self.memory.memory_matrix = output_list[2]
-                    self.memory.link_matrix = output_list[3]
-                    self.memory.precedence_vector = output_list[4]
-                    self.memory.read_weightings = output_list[5]
-                    self.memory.read_vectors = output_list[6]
-
-                    if self.controller.has_recurrent_nn:
-                        controller_state = (output_list[11], output_list[12])
-
-
-                    outputs.append(output_list[7])
-
-                    # collecting memory view for the current step
-                    free_gates.append(output_list[8])
-                    allocation_gates.append(output_list[9])
-                    write_gates.append(output_list[10])
-                    read_weightings.append(output_list[5])
-                    write_weightings.append(output_list[1])
-                    usage_vectors.append(output_list[0])
-
-                    # just to make sure iterations run serially
-                    dependencies = [tf.identity(output_list[0])]
-
-        if self.controller.has_recurrent_nn:            
-            dependencies.append(self.controller.update_state(controller_state))
+        dependencies = []
+        if self.controller.has_recurrent_nn:
+            dependencies.append(self.controller.update_state(final_results[8]))
 
         with tf.control_dependencies(dependencies):
-            self.packed_output = tf.slice(tf.pack(outputs, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
+            self.packed_output = utility.pack_into_tensor(final_results[1], axis=1)
             self.packed_memory_view = {
-                'free_gates': tf.slice(tf.pack(free_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
-                'allocation_gates': tf.slice(tf.pack(allocation_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
-                'write_gates': tf.slice(tf.pack(write_gates, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
-                'read_weightings': tf.slice(tf.pack(read_weightings, axis=1), [0, 0, 0, 0], [-1, self.sequence_length, -1, -1]),
-                'write_weightings': tf.slice(tf.pack(write_weightings, axis=1), [0, 0, 0], [-1, self.sequence_length, -1]),
-                'usage_vectors': tf.slice(tf.pack(usage_vectors, axis=1), [0, 0, 0], [-1, self.sequence_length, -1])
+                'free_gates': utility.pack_into_tensor(final_results[2], axis=1),
+                'allocation_gates': utility.pack_into_tensor(final_results[3], axis=1),
+                'write_gates': utility.pack_into_tensor(final_results[4], axis=1),
+                'read_weightings': utility.pack_into_tensor(final_results[5], axis=1),
+                'write_weightings': utility.pack_into_tensor(final_results[6], axis=1),
+                'usage_vectors': utility.pack_into_tensor(final_results[7], axis=1)
             }
 
 
