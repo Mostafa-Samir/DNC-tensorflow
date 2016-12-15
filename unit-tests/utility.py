@@ -52,5 +52,34 @@ class DNCUtilityTests(unittest.TestCase):
                 self.assertTrue(np.allclose(UV, predicted_UV))
 
 
+    def test_unpack_into_tensorarray(self):
+         graph = tf.Graph()
+         with graph.as_default():
+             with tf.Session(graph=graph) as session:
+
+                 T = tf.random_normal([5, 10, 7, 7])
+                 ta = util.unpack_into_tensorarray(T, axis=1)
+
+                 vT, vTA5 = session.run([T, ta.read(5)])
+
+                 self.assertEqual(vTA5.shape, (5, 7, 7))
+                 self.assertTrue(np.allclose(vT[:, 5, :, :], vTA5))
+
+
+    def test_pack_into_tensor(self):
+         graph = tf.Graph()
+         with graph.as_default():
+             with tf.Session(graph=graph) as session:
+
+                T = tf.random_normal([5, 10, 7, 7])
+                ta = util.unpack_into_tensorarray(T, axis=1)
+                pT = util.pack_into_tensor(ta, axis=1)
+
+                vT, vPT = session.run([T, pT])
+
+                self.assertEqual(vPT.shape, (5, 10, 7, 7))
+                self.assertTrue(np.allclose(vT, vPT)) 
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
