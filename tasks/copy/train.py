@@ -70,7 +70,6 @@ if __name__ == '__main__':
             llprint("Building Computational Graph ... ")
 
             optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=momentum)
-            summerizer = tf.train.SummaryWriter(tb_logs_dir, session.graph)
 
             ncomputer = DNC(
                 FeedforwardController,
@@ -103,6 +102,8 @@ if __name__ == '__main__':
 
             summerize_op = tf.merge_summary(summeries)
             no_summerize = tf.no_op()
+
+            summerizer = tf.train.SummaryWriter(tb_logs_dir, session.graph)
 
             llprint("Done!\n")
 
