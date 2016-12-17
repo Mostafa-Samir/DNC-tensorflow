@@ -155,7 +155,7 @@ if __name__ == '__main__':
                 summerizer.add_summary(summary, i)
 
                 if summerize:
-                    llprint("\n\tAvg. Logistic Loss: %.4f\n" % (np.mean(last_100_losses)))
+                    llprint("\n\tAvg. Cross-Entropy: %.4f\n" % (np.mean(last_100_losses)))
                     last_100_losses = []
 
                 if take_checkpoint:
