@@ -23,7 +23,7 @@ def onehot(index, size):
     vec[index] = 1.0
     return vec
 
-def prepare_sample(sample, target_code, word_space_size, batch_size):
+def prepare_sample(sample, target_code, word_space_size):
     input_vec = np.array(sample[0]['inputs'], dtype=np.float32)
     output_vec = np.array(sample[0]['inputs'], dtype=np.float32)
     seq_len = input_vec.shape[0]
@@ -33,12 +33,12 @@ def prepare_sample(sample, target_code, word_space_size, batch_size):
     output_vec[target_mask] = sample[0]['outputs']
     weights_vec[target_mask] = 1.0
 
-    input_vec = np.apply_along_axis(onehot, 0, input_vec)
-    output_vec = np.apply_along_axis(onehot, 0, output_vec)
+    input_vec = np.array([onehot(code, word_space_size) for code in input_vec])
+    output_vec = np.array([onehot(code, word_space_size) for code in output_vec])
 
     return (
-        np.reshape(input_vec, (1, -1, -1)),
-        np.reshape(output_vec, (1, -1, -1)),
+        np.reshape(input_vec, (1, -1, word_space_size)),
+        np.reshape(output_vec, (1, -1, word_space_size)),
         seq_len,
         np.reshape(weights_vec, (1, -1, 1))
     )
