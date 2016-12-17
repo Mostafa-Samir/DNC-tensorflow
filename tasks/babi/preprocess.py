@@ -155,6 +155,7 @@ if __name__ == '__main__':
     encoded_files, stories_lengths = encode_data(files_list, lexicon_dictionary, length_limit)
 
     stories_lengths = np.array(stories_lengths)
+    length_limit = np.max(stories_lengths) if length_limit is None else length_limit
     print "Total Number of stories: %d" % (len(stories_lengths))
     print "Number of stories with lengthes > %d: %d (%% %.2f) [discarded]" % (length_limit, np.sum(stories_lengths > length_limit), np.mean(stories_lengths > length_limit) * 100.0)
     print "Number of Remaining Stories: %d" % (len(stories_lengths[stories_lengths <= length_limit]))
@@ -168,6 +169,8 @@ if __name__ == '__main__':
     mkdir(processed_data_dir)
     mkdir(train_data_dir)
     mkdir(test_data_dir)
+
+    llprint("Savind processed data to disk ... ")
 
     pickle.dump(lexicon_dictionary, open(join(processed_data_dir, 'lexicon-dict.pkl'), 'wb'))
 
@@ -184,3 +187,5 @@ if __name__ == '__main__':
 
     if joint_train:
         pickle.dump(joint_train_data, open(join(train_data_dir, 'train.pkl'), 'wb'))
+
+    llprint("Done!\n")
