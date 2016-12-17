@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.ops.rnn_cell import LSTMStateTuple
 from memory import Memory
 import utility
 import os
@@ -46,8 +47,6 @@ class DNC:
         self.input_data = tf.placeholder(tf.float32, [batch_size, None, input_size], name='input')
         self.target_output = tf.placeholder(tf.float32, [batch_size, None, output_size], name='targets')
         self.sequence_length = tf.placeholder(tf.int32, name='sequence_length')
-
-        self.input_padding = tf.zeros([batch_size, max_sequence_length, input_size])
 
         self.build_graph()
 
@@ -151,7 +150,7 @@ class DNC:
         new_memory_state = tuple(output_list[0:7])
 
         if self.controller.has_recurrent_nn:
-            new_controller_state = (output_list[11], output_list[12])
+            new_controller_state = LSTMStateTuple(output_list[11], output_list[12])
 
         outputs = outputs.write(time, output_list[7])
 
@@ -187,8 +186,10 @@ class DNC:
         write_weightings = tf.TensorArray(tf.float32, self.sequence_length)
         usage_vectors = tf.TensorArray(tf.float32, self.sequence_length)
 
-        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else tf.zeros(1)
+        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else (tf.zeros(1), tf.zeros(1))
         memory_state = self.memory.init_memory()
+        if not isinstance(controller_state, LSTMStateTuple):
+            controller_state = LSTMStateTuple(controller_state[0], controller_state[1])
         final_results = None
 
         with tf.variable_scope("sequence_loop") as scope:
