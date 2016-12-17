@@ -353,14 +353,14 @@ class Memory:
         lookup_weighting = self.get_lookup_weighting(memory_matrix, key, strength)
         new_usage_vector = self.update_usage_vector(usage_vector, read_weightings, write_weighting, free_gates)
 
-        sorted_usage, free_list = tf.nn.top_k(-1 * usage_vector, self.words_num)
+        sorted_usage, free_list = tf.nn.top_k(-1 * new_usage_vector, self.words_num)
         sorted_usage = -1 * sorted_usage
 
         allocation_weighting = self.get_allocation_weighting(sorted_usage, free_list)
         new_write_weighting = self.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
-        new_memory_matrix = self.update_memory(memory_matrix, write_weighting, write_vector, erase_vector)
-        new_link_matrix = self.update_link_matrix(precedence_vector, link_matrix, write_weighting)
-        new_precedence_vector = self.update_precedence_vector(precedence_vector, write_weighting)
+        new_memory_matrix = self.update_memory(memory_matrix, new_write_weighting, write_vector, erase_vector)
+        new_link_matrix = self.update_link_matrix(precedence_vector, link_matrix, new_write_weighting)
+        new_precedence_vector = self.update_precedence_vector(precedence_vector, new_write_weighting)
 
         return new_usage_vector, new_write_weighting, new_memory_matrix, new_link_matrix, new_precedence_vector
 
@@ -391,7 +391,7 @@ class Memory:
 
         lookup_weighting = self.get_lookup_weighting(memory_matrix, keys, strengths)
         forward_weighting, backward_weighting = self.get_directional_weightings(read_weightings, link_matrix)
-        read_weightings = self.update_read_weightings(lookup_weighting, forward_weighting, backward_weighting, read_modes)
-        read_vectors = self.update_read_vectors(memory_matrix, read_weightings)
+        new_read_weightings = self.update_read_weightings(lookup_weighting, forward_weighting, backward_weighting, read_modes)
+        new_read_vectors = self.update_read_vectors(memory_matrix, new_read_weightings)
 
-        return read_weightings, read_vectors
+        return new_read_weightings, new_read_vectors
