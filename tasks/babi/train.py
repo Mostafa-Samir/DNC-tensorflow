@@ -103,7 +103,9 @@ if __name__ == '__main__':
             output, _ = ncomputer.get_outputs()
 
             loss_weights = tf.placeholder(tf.float32, [batch_size, None, 1])
-            loss = loss_weights * tf.nn.softmax_cross_entropy_with_logits(output, ncomputer.target_output)
+            loss = tf.reduce_mean(
+                loss_weights * tf.nn.softmax_cross_entropy_with_logits(output, ncomputer.target_output)
+            )
 
             gradients = optimizer.compute_gradients(loss)
             for i, (grad, var) in enumerate(gradients):
