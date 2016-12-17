@@ -120,33 +120,6 @@ class DNC:
         ]
 
 
-    def _dummy_op(self, controller_state=None):
-        """
-        returns dummy outputs for padded, out of sequence inputs
-        """
-
-        return [
-
-            # report the current memory state unchanged
-            self.memory.usage_vector,
-            self.memory.write_weighting,
-            self.memory.memory_matrix,
-            self.memory.link_matrix,
-            self.memory.precedence_vector,
-            self.memory.read_weightings,
-            self.memory.read_vectors,
-
-            tf.zeros([self.batch_size, self.output_size]),
-            tf.zeros([self.batch_size, self.read_heads]),
-            tf.zeros([self.batch_size, 1]),
-            tf.zeros([self.batch_size, 1]),
-
-            # report state of RNN if exists
-            controller_state[0] if controller_state is not None else tf.zeros(1),
-            controller_state[1] if controller_state is not None else tf.zeros(1)
-        ]
-
-
     def _loop_body(self, time, memory_state, outputs, free_gates, allocation_gates, write_gates,
                    read_weightings, write_weightings, usage_vectors, controller_state):
         """
