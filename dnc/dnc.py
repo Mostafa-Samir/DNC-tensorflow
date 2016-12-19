@@ -204,7 +204,7 @@ class DNC:
                     read_weightings, write_weightings,
                     usage_vectors, controller_state
                 ),
-                parallel_iterations=1,
+                parallel_iterations=32,
                 swap_memory=True
             )
 
