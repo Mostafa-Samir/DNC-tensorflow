@@ -80,7 +80,6 @@ if __name__ == '__main__':
             iterations = int(opt[1])
 
     graph = tf.Graph()
-
     with graph.as_default():
         with tf.Session(graph=graph) as session:
 
@@ -134,33 +133,41 @@ if __name__ == '__main__':
             last_100_losses = []
 
             for i in xrange(iterations + 1):
-                llprint("\rIteration %d/%d" % (i, iterations))
+                try:
+                    llprint("\rIteration %d/%d" % (i, iterations))
 
-                sample = np.random.choice(data, 1)
-                input_data, target_output, seq_len, weights = prepare_sample(sample, lexicon_dict['-'], word_space_size)
+                    sample = np.random.choice(data, 1)
+                    input_data, target_output, seq_len, weights = prepare_sample(sample, lexicon_dict['-'], word_space_size)
 
-                summerize = (i % 100 == 0)
-                take_checkpoint = (i != 0) and (i % iterations == 0)
+                    summerize = (i % 100 == 0)
+                    take_checkpoint = (i != 0) and (i % iterations == 0)
 
-                loss_value, _, summary = session.run([
-                    loss,
-                    apply_gradients,
-                    summerize_op if summerize else no_summerize
-                ], feed_dict={
-                    ncomputer.input_data: input_data,
-                    ncomputer.target_output: target_output,
-                    ncomputer.sequence_length: seq_len,
-                    loss_weights: weights
-                })
+                    loss_value, _, summary = session.run([
+                        loss,
+                        apply_gradients,
+                        summerize_op if summerize else no_summerize
+                    ], feed_dict={
+                        ncomputer.input_data: input_data,
+                        ncomputer.target_output: target_output,
+                        ncomputer.sequence_length: seq_len,
+                        loss_weights: weights
+                    })
 
-                last_100_losses.append(loss_value)
-                summerizer.add_summary(summary, i)
+                    last_100_losses.append(loss_value)
+                    summerizer.add_summary(summary, i)
 
-                if summerize:
-                    llprint("\n\tAvg. Cross-Entropy: %.4f\n" % (np.mean(last_100_losses)))
-                    last_100_losses = []
+                    if summerize:
+                        llprint("\n\tAvg. Cross-Entropy: %.4f\n" % (np.mean(last_100_losses)))
+                        last_100_losses = []
 
-                if take_checkpoint:
+                    if take_checkpoint:
+                        llprint("\nSaving Checkpoint ... "),
+                        ncomputer.save(session, ckpts_dir, 'step-%d' % (i))
+                        llprint("Done!\n")
+
+                except KeyboardInterrupt:
+
                     llprint("\nSaving Checkpoint ... "),
                     ncomputer.save(session, ckpts_dir, 'step-%d' % (i))
                     llprint("Done!\n")
+                    sys.exit(0)
