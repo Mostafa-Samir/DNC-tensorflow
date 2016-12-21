@@ -71,13 +71,15 @@ if __name__ == '__main__':
     from_checkpoint = None
     iterations = 100000
 
-    options,_ = getopt.getopt(sys.argv[1:], '', ['checkpoint=', 'iterations='])
+    options,_ = getopt.getopt(sys.argv[1:], '', ['checkpoint=', 'iterations=', 'start='])
 
     for opt in options:
         if opt[0] == '--checkpoint':
             from_checkpoint = opt[1]
         elif opt[0] == '--iterations':
             iterations = int(opt[1])
+        elif opt[0] == '--start':
+            start_step = int(opt[1])
 
     graph = tf.Graph()
     with graph.as_default():
@@ -132,15 +134,18 @@ if __name__ == '__main__':
 
             last_100_losses = []
 
-            for i in xrange(iterations + 1):
+            start = 0 if start_step == 0 else start_step + 1
+            end = start_step + iterations + 1
+
+            for i in xrange(start, end):
                 try:
-                    llprint("\rIteration %d/%d" % (i, iterations))
+                    llprint("\rIteration %d/%d" % (i, end))
 
                     sample = np.random.choice(data, 1)
                     input_data, target_output, seq_len, weights = prepare_sample(sample, lexicon_dict['-'], word_space_size)
 
                     summerize = (i % 100 == 0)
-                    take_checkpoint = (i != 0) and (i % iterations == 0)
+                    take_checkpoint = (i != 0) and (i % end == 0)
 
                     loss_value, _, summary = session.run([
                         loss,
