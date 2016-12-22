@@ -169,7 +169,7 @@ if __name__ == '__main__':
                     summerizer.add_summary(summary, i)
 
                     if summerize:
-                        llprint("\n\tAvg. Cross-Entropy: %.4f\n" % (np.mean(last_100_losses)))
+                        llprint("\n\tAvg. Cross-Entropy: %.7f\n" % (np.mean(last_100_losses)))
 
                         end_time_100 = time.time()
                         elapsed_time = (end_time_100 - start_time_100) / 60
