@@ -170,7 +170,7 @@ if __name__ == '__main__':
     mkdir(train_data_dir)
     mkdir(test_data_dir)
 
-    llprint("Savind processed data to disk ... ")
+    llprint("Saving processed data to disk ... ")
 
     pickle.dump(lexicon_dictionary, open(join(processed_data_dir, 'lexicon-dict.pkl'), 'wb'))
 
