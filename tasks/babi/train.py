@@ -5,6 +5,7 @@ import tensorflow as tf
 import numpy as np
 import pickle
 import getopt
+import time
 import sys
 import os
 
@@ -70,6 +71,7 @@ if __name__ == '__main__':
 
     from_checkpoint = None
     iterations = 100000
+    start_step = 0
 
     options,_ = getopt.getopt(sys.argv[1:], '', ['checkpoint=', 'iterations=', 'start='])
 
@@ -137,6 +139,11 @@ if __name__ == '__main__':
             start = 0 if start_step == 0 else start_step + 1
             end = start_step + iterations + 1
 
+            start_time_100 = time.time()
+            end_time_100 = None
+            avg_100_time = 0.
+            avg_counter = 0
+
             for i in xrange(start, end):
                 try:
                     llprint("\rIteration %d/%d" % (i, end))
@@ -163,6 +170,17 @@ if __name__ == '__main__':
 
                     if summerize:
                         llprint("\n\tAvg. Cross-Entropy: %.4f\n" % (np.mean(last_100_losses)))
+
+                        end_time_100 = time.time()
+                        elapsed_time = (end_time_100 - start_time_100) / 60
+                        avg_counter += 1
+                        avg_100_time += (1. / avg_counter) * (elapsed_time - avg_100_time)
+                        estimated_time = (avg_100_time * ((end - i) / 100.)) / 60.
+
+                        print "\tAvg. 100 iterations time: %.2f minutes" % (avg_100_time)
+                        print "\tApprox. time to completion: %.2f hours" % (estimated_time)
+
+                        start_time_100 = time.time()
                         last_100_losses = []
 
                     if take_checkpoint:
