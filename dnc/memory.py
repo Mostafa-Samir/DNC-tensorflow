@@ -31,6 +31,12 @@ class Memory:
         # a words_num x words_num identity matrix
         self.I = tf.constant(np.identity(words_num, dtype=np.float32))
 
+        # maps the indecies from the 2D array of free list per batch to
+        # their corresponding values in the flat 1D array of ordered_allocation_weighting
+        self.index_mapper = tf.constant(
+            np.cumsum([0] + [words_num] * (batch_size - 1), dtype=np.int32)[:, np.newaxis]
+        )
+
     def init_memory(self):
         """
         returns the initial values for the memory Parameters
@@ -115,16 +121,18 @@ class Memory:
         shifted_cumprod = tf.cumprod(sorted_usage, axis = 1, exclusive=True)
         unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
 
-        allocation_weighting_batches = []
-        for b in range(self.batch_size):
-            allocation_weighting = tf.zeros([self.words_num])
-            unpacked_free_list = tf.unpack(free_list[b])
-            for pos, original_indx in enumerate(unpacked_free_list):
-                mask = tf.squeeze(tf.slice(self.I, [original_indx, 0], [1, -1]))
-                allocation_weighting += mask * unordered_allocation_weighting[b, pos]
-            allocation_weighting_batches.append(allocation_weighting)
+        mapped_free_list = free_list + self.index_mapper
+        flat_unordered_allocation_weighting = tf.reshape(unordered_allocation_weighting, (-1,))
+        flat_mapped_free_list = tf.reshape(mapped_free_list, (-1,))
+        flat_container = tf.TensorArray(tf.float32, self.batch_size * self.words_num)
 
-        return tf.pack(allocation_weighting_batches)
+        flat_ordered_weightings = flat_container.scatter(
+            flat_mapped_free_list,
+            flat_unordered_allocation_weighting
+        )
+
+        packed_wightings = flat_ordered_weightings.pack()
+        return tf.reshape(packed_wightings, (self.batch_size, self.words_num))
 
 
     def update_write_weighting(self, lookup_weighting, allocation_weighting, write_gate, allocation_gate):
