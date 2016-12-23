@@ -149,8 +149,7 @@ class DNC:
         new_controller_state = tf.zeros(1)
         new_memory_state = tuple(output_list[0:7])
 
-        if self.controller.has_recurrent_nn:
-            new_controller_state = LSTMStateTuple(output_list[11], output_list[12])
+        new_controller_state = LSTMStateTuple(output_list[11], output_list[12])
 
         outputs = outputs.write(time, output_list[7])
 
