@@ -52,15 +52,15 @@ class BaseController:
 
             # defining internal weights of the controller
             self.interface_weights = tf.Variable(
-                tf.truncated_normal([nn_output_size, self.interface_vector_size], stddev=initial_std(nn_output_size)),
+                tf.random_normal([nn_output_size, self.interface_vector_size], stddev=0.1),
                 name='interface_weights'
             )
             self.nn_output_weights = tf.Variable(
-                tf.truncated_normal([nn_output_size, self.output_size], stddev=initial_std(nn_output_size)),
+                tf.random_normal([nn_output_size, self.output_size], stddev=0.1),
                 name='nn_output_weights'
             )
             self.mem_output_weights = tf.Variable(
-                tf.truncated_normal([self.word_size * self.read_heads, self.output_size],  stddev=initial_std(self.word_size * self.read_heads)),
+                tf.random_normal([self.word_size * self.read_heads, self.output_size],  stddev=0.1),
                 name='mem_output_weights'
             )
 

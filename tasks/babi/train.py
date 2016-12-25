@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     dirname = os.path.dirname(__file__)
     ckpts_dir = os.path.join(dirname , 'checkpoints')
-    data_dir = os.path.join(dirname, 'data', 'en-10k')
+    data_dir = os.path.join(dirname, 'data', 'en')
     tb_logs_dir = os.path.join(dirname, 'logs')
 
     llprint("Loading Data ... ")
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     sequence_max_length = 100
     word_space_size = len(lexicon_dict)
     words_count = 256
-    word_size = 32
+    word_size = 64
     read_heads = 4
 
     learning_rate = 1e-4
@@ -110,16 +110,21 @@ if __name__ == '__main__':
                 loss_weights * tf.nn.softmax_cross_entropy_with_logits(output, ncomputer.target_output)
             )
 
+            summeries = []
+
             gradients = optimizer.compute_gradients(loss)
             for i, (grad, var) in enumerate(gradients):
                 if grad is not None:
                     gradients[i] = (tf.clip_by_value(grad, -10, 10), var)
+            for (grad, var) in gradients:
+                if grad is not None:
+                    summeries.append(tf.histogram_summary(var.name + '/grad', grad))
 
             apply_gradients = optimizer.apply_gradients(gradients)
 
-            summerize_loss = tf.scalar_summary("Loss", loss)
+            summeries.append(tf.scalar_summary("Loss", loss))
 
-            summerize_op = tf.merge_summary([summerize_loss])
+            summerize_op = tf.merge_summary(summeries)
             no_summerize = tf.no_op()
 
             llprint("Done!\n")
@@ -144,7 +149,7 @@ if __name__ == '__main__':
             avg_100_time = 0.
             avg_counter = 0
 
-            for i in xrange(start, end):
+            for i in xrange(start, end + 1):
                 try:
                     llprint("\rIteration %d/%d" % (i, end))
 
