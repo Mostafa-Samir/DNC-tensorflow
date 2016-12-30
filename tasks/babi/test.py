@@ -42,13 +42,13 @@ def prepare_sample(sample, target_code, word_space_size):
     )
 
 ckpts_dir = './checkpoints/'
-lexicon_dictionary = load('./data/en/lexicon-dict.pkl')
+lexicon_dictionary = load('./data/en-10k/lexicon-dict.pkl')
 question_code = lexicon_dictionary["?"]
 target_code = lexicon_dictionary["-"]
 test_files = []
 
-for entryname in os.listdir('./data/en/test/'):
-    entry_path = os.path.join('./data/en/test/', entryname)
+for entryname in os.listdir('./data/en-10k/test/'):
+    entry_path = os.path.join('./data/en-10k/test/', entryname)
     if os.path.isfile(entry_path):
         test_files.append(entry_path)
 
