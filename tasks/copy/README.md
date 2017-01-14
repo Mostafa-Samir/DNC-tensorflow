@@ -4,6 +4,7 @@ Both series and single models were trained on 2-layer feedforward controller (wi
 
 - RMSProp Optimizer with learning rate of 10⁻⁴, momentum of 0.9.
 - Memory word size of 10, with a single read head.
+- Controller weights are initialized from samples 1 standard-deviation away from a zero mean normal distribution with a variance ![](https://latex.codecogs.com/gif.latex?%5Cinline%20%5Csigma%5E2%20%3D%20%5Ctext%7Bmin%7D%5Chspace%7B0.2em%7D%5Cleft%281%5Ctimes10%5E%7B-4%7D%2C%20%5Cfrac%7B2%7D%7Bn%7D%5Cright%29), where ![](https://latex.codecogs.com/gif.latex?%5Cinline%20n) is the size of the input vector coming into the weight matrix.
 - A batch size of 1.
 
 All output from the DNC is squashed between 0 and 1 using a sigmoid functions and  binary cross-entropy loss (or logistic loss) function of the form:
