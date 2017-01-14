@@ -7,13 +7,15 @@ This implementation doesn't include all the tasks that was described in the pape
 
 ## Local Environment Specification
 
-All experiments and tests ran on a machine with:
+Copy experiments and tests ran on a machine with:
 - An Intel Core i5 2410M CPU @ 2.30GHz (2 physical cores, with hyper-threading enabled)
-- 4GB SO-DIMM DDR3 @ 1333MHz
+- 4GB SO-DIMM DDR3 RAM @ 1333MHz
 - No GPU.
 - Ubuntu 14.04 LTS
 - TensorFlow r0.11
 - Python 2.7
+
+bAbI experiment and tests ran on an AWS P2 instance on 1 Tesla K80 GPU.
 
 ## Experiments
 
@@ -49,6 +51,35 @@ The model was then tested on pairs of increasing sequence lengths and increasing
 
 ![DNC-Scalability](/assets/DNC-scalable.png)
 
+### bAbI Task
+
+This experiment was designed to reproduce the paper's results on the bAbI 20QA task. By training a model with the same parameters as DNC1 described in the paper (Extended Data Table 2) on the **en-10k** dataset, the model resulted in error percentages that *mostly* fell within the 1 standard deviation of the means reported in the paper (Extended Data Table 1). The results, and their comparison to the paper's mean results, are shown in the following table. Details about training and reproduction can be found [here](tasks/babi/).
+
+| Task Name | Results | Paper's Mean |
+| --------- | ------- | ------------ |
+| single supporting fact | 0.00%  | 9.0±12.6% |
+| two supporting facts   | 11.88% | 39.2±20.5% |
+| three supporting facts | 27.80% | 39.6±16.4% |
+| two arg relations      | 1.40%  | 0.4±0.7% |
+| three arg relations    | 1.70%  | 1.5±1.0% |
+| yes no questions       | 0.50%  | 6.9±7.5% |
+| counting               | 4.90%  | 9.8±7.0% |
+| lists sets             | 2.10%  | 5.5±5.9% |
+| simple negation        | 0.80%  | 7.7±8.3% |
+| indefinite knowledge   | 1.70%  | 9.6±11.4% |
+| basic coreference      | 0.10%  | 3.3±5.7% |
+| conjunction            | 0.00%  | 5.0±6.3% |
+| compound coreference   | 0.40%  | 3.1±3.6% |
+| time reasoning         | 11.80% | 11.0±7.5% |
+| basic deduction        | 45.44% | 27.2±20.1% |
+| basic induction        | 56.43% | 53.6±1.9% |
+| positional reasoning   | 39.02% | 32.4±8.0% |
+| size reasoning         | 8.68%  | 4.2±1.8% |
+| path finding           | 98.21% | 64.6±37.4% |
+| agents motivations     | 2.71%  | 0.0±0.1% |
+| **Mean Err.**          | 15.78% | 16.7±7.6% |
+| **Failed (err. > 5%)** |  8     | 11.2±5.4 |
+
 ## Getting Involved
 
 If you're interested in using the implementation for new tasks, you should first start by **[reading the structure and basic usage guide](docs/basic-usage.md)** to get comfortable with how the project is structured and how it can be extended to new tasks.
@@ -63,7 +94,7 @@ You might also find the **[implementation notes](docs/implementation-notes.md)**
     - Sparse link matrix.
     - Variable sequence lengths across the same batch.
 - **Tasks**:
-    - bAbI task.
+    - ~~bAbI task.~~
     - Graph inference tasks.
     - Mini-SHRDLU task.
 - **Utility**:
