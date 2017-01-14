@@ -84,6 +84,33 @@ class RecurrentController(BaseController):
         return (self.output, self.state)
 ```
 
+#### Initial Transformation Weights
+
+By default, the transformation weights matrices ![](https://latex.codecogs.com/gif.latex?W_y%2C%20W_%5Czeta%2C%20W_r) are initialized from a zero-mean normal distribution with a standard deviation of 0.1. This initialization scheme is defined in the `initials` method of a `BaseController`:
+
+```python
+def initials(self):
+    """
+    sets the initial values of the controller transformation weights matrices
+    this method can be overwritten to use a different initialization scheme
+    """
+    # defining internal weights of the controller
+    self.interface_weights = tf.Variable(
+        tf.random_normal([self.nn_output_size, self.interface_vector_size], stddev=0.1),
+        name='interface_weights'
+    )
+    self.nn_output_weights = tf.Variable(
+        tf.random_normal([self.nn_output_size, self.output_size], stddev=0.1),
+        name='nn_output_weights'
+    )
+    self.mem_output_weights = tf.Variable(
+        tf.random_normal([self.word_size * self.read_heads, self.output_size],  stddev=0.1),
+        name='mem_output_weights'
+    )
+```
+
+A different initialization scheme can be defined by overwriting this method with the desired scheme. See [the FeedforwardController of the copy task](../tasks/copy/feedforward_controller.py) as an example of different initialization scheme.
+
 ### Using the DNC module
 
 Once you defined your concrete controller class, you're then ready to plug in that controller and use the DNC on your task.
