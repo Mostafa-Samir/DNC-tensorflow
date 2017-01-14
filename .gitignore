@@ -2,7 +2,7 @@
 *.pyc
 
 # tensorboard logs directories
-#logs
+logs
 
 # IPython checkpoints directories
 .ipynb_checkpoints
