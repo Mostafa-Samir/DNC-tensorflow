@@ -44,26 +44,30 @@ class BaseController:
         with tf.name_scope("controller"):
             self.network_vars()
 
-            nn_output_size = None
+            self.nn_output_size = None
             with tf.variable_scope("shape_inference"):
-                nn_output_size = self.get_nn_output_size()
+                self.nn_output_size = self.get_nn_output_size()
 
-            initial_std = lambda in_nodes: np.min(1e-2, np.sqrt(2.0 / in_nodes))
+            self.initials()
 
-            # defining internal weights of the controller
-            self.interface_weights = tf.Variable(
-                tf.random_normal([nn_output_size, self.interface_vector_size], stddev=0.1),
-                name='interface_weights'
-            )
-            self.nn_output_weights = tf.Variable(
-                tf.random_normal([nn_output_size, self.output_size], stddev=0.1),
-                name='nn_output_weights'
-            )
-            self.mem_output_weights = tf.Variable(
-                tf.random_normal([self.word_size * self.read_heads, self.output_size],  stddev=0.1),
-                name='mem_output_weights'
-            )
-
+    def initials(self):
+        """
+        sets the initial values of the controller transformation weights matrices
+        this method can be overwritten to use a different initialization scheme
+        """
+        # defining internal weights of the controller
+        self.interface_weights = tf.Variable(
+            tf.random_normal([self.nn_output_size, self.interface_vector_size], stddev=0.1),
+            name='interface_weights'
+        )
+        self.nn_output_weights = tf.Variable(
+            tf.random_normal([self.nn_output_size, self.output_size], stddev=0.1),
+            name='nn_output_weights'
+        )
+        self.mem_output_weights = tf.Variable(
+            tf.random_normal([self.word_size * self.read_heads, self.output_size],  stddev=0.1),
+            name='mem_output_weights'
+        )
 
     def network_vars(self):
         """
