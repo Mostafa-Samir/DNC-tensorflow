@@ -153,7 +153,7 @@ if __name__ == '__main__':
                 try:
                     llprint("\rIteration %d/%d" % (i, end))
 
-                    # We use for training just (sequence_max_length / 2) examples
+                    # We use for training just (sequence_max_length / 10) examples
                     seq_len = np.random.randint(2, (sequence_max_length / 10) + 1)
                     input_data, target_output, sums_text, weights = generate_data(seq_len, input_size)
 
@@ -187,7 +187,7 @@ if __name__ == '__main__':
                         print "Avg. 100 iterations time: %.2f minutes" % (avg_100_time)
                         print "Approx. time to completion: %.2f hours" % (estimated_time)
                         print "DNC input", input_data
-                        print "Text input:     ", sums_text[:-2] + " = ? "
+                        print "Text input:     ", sums_text[:-2] + " = - "
                         print "Target_output", target_output
                         output_ = output_ * weights
                         print "DNC output", output_
