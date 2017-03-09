@@ -1,3 +1,4 @@
+from __future__ import print_function
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -149,7 +150,7 @@ if __name__ == '__main__':
             avg_100_time = 0.
             avg_counter = 0
 
-            for i in xrange(start, end + 1):
+            for i in range(start, end + 1):
                 try:
                     llprint("\rIteration %d/%d" % (i, end))
 
@@ -182,8 +183,8 @@ if __name__ == '__main__':
                         avg_100_time += (1. / avg_counter) * (elapsed_time - avg_100_time)
                         estimated_time = (avg_100_time * ((end - i) / 100.)) / 60.
 
-                        print "\tAvg. 100 iterations time: %.2f minutes" % (avg_100_time)
-                        print "\tApprox. time to completion: %.2f hours" % (estimated_time)
+                        print("\tAvg. 100 iterations time: %.2f minutes" % (avg_100_time))
+                        print("\tApprox. time to completion: %.2f hours" % (estimated_time))
 
                         start_time_100 = time.time()
                         last_100_losses = []

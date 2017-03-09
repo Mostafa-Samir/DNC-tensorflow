@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import pickle
 import getopt
@@ -44,7 +45,7 @@ def create_dictionary(files_list):
 
         llprint("\rCreating Dictionary ... %d/%d" % ((indx + 1), len(files_list)))
 
-    print "\rCreating Dictionary ... Done!"
+    print("\rCreating Dictionary ... Done!")
     return lexicons_dict
 
 
@@ -113,7 +114,7 @@ def encode_data(files_list, lexicons_dictionary, length_limit=None):
 
         llprint("\rEncoding Data ... %d/%d" % (indx + 1, len(files_list)))
 
-    print "\rEncoding Data ... Done!"
+    print("\rEncoding Data ... Done!")
     return files, stories_lengths
 
 
@@ -156,9 +157,9 @@ if __name__ == '__main__':
 
     stories_lengths = np.array(stories_lengths)
     length_limit = np.max(stories_lengths) if length_limit is None else length_limit
-    print "Total Number of stories: %d" % (len(stories_lengths))
-    print "Number of stories with lengthes > %d: %d (%% %.2f) [discarded]" % (length_limit, np.sum(stories_lengths > length_limit), np.mean(stories_lengths > length_limit) * 100.0)
-    print "Number of Remaining Stories: %d" % (len(stories_lengths[stories_lengths <= length_limit]))
+    print("Total Number of stories: %d" % (len(stories_lengths)))
+    print("Number of stories with lengthes > %d: %d (%% %.2f) [discarded]" % (length_limit, np.sum(stories_lengths > length_limit), np.mean(stories_lengths > length_limit) * 100.0))
+    print("Number of Remaining Stories: %d" % (len(stories_lengths[stories_lengths <= length_limit])))
 
     processed_data_dir = join(task_dir, 'data', basename(normpath(data_dir)))
     train_data_dir = join(processed_data_dir, 'train')

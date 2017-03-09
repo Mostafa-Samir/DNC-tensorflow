@@ -131,10 +131,10 @@ class DNCControllerTest(unittest.TestCase):
                 rv, rzeta, rs = session.run([rv_op, rzeta_op, rs_op])
 
                 self.assertEqual(v.shape, (2, 10))
-                self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in zeta.iteritems()], axis=1).shape, (2, 38))
+                self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in zeta.items()], axis=1).shape, (2, 38))
 
                 self.assertEqual(rv.shape, (2, 10))
-                self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in rzeta.iteritems()], axis=1).shape, (2, 38))
+                self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in rzeta.items()], axis=1).shape, (2, 38))
                 self.assertEqual([_s.shape for _s in rs], [(2, 64), (2, 64)])
 
 
