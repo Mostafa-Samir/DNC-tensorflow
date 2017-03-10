@@ -45,6 +45,53 @@ def pairwise_add(u, v=None, is_batch=False):
         return U + V
 
 
+import tensorflow as tf
+import numpy as np
+from tensorflow.python.ops import gen_state_ops
+
+def pairwise_add(u, v=None, is_batch=False):
+    """
+    performs a pairwise summation between vectors (possibly the same)
+
+    Parameters:
+    ----------
+    u: Tensor (n, ) | (n, 1)
+    v: Tensor (n, ) | (n, 1) [optional]
+    is_batch: bool
+        a flag for whether the vectors come in a batch
+        ie.: whether the vectors has a shape of (b,n) or (b,n,1)
+
+    Returns: Tensor (n, n)
+    Raises: ValueError
+    """
+    u_shape = u.get_shape().as_list()
+
+    if len(u_shape) > 2 and not is_batch:
+        raise ValueError("Expected at most 2D tensors, but got %dD" % len(u_shape))
+    if len(u_shape) > 3 and is_batch:
+        raise ValueError("Expected at most 2D tensor batches, but got %dD" % len(u_shape))
+
+    if v is None:
+        v = u
+    else:
+        v_shape = v.get_shape().as_list()
+        if u_shape != v_shape:
+            raise VauleError("Shapes %s and %s do not match" % (u_shape, v_shape))
+
+    n = u_shape[0] if not is_batch else u_shape[1]
+
+    column_u = tf.reshape(u, (-1, 1) if not is_batch else (-1, n, 1))
+    U = tf.concat([column_u] * n, 1 if not is_batch else 2)
+
+    if v is u:
+        return U + tf.transpose(U, None if not is_batch else [0, 2, 1])
+    else:
+        row_v = tf.reshape(v, (1, -1) if not is_batch else (-1, 1, n))
+        V = tf.concat([row_v] * n, 0 if not is_batch else 1)
+
+        return U + V
+
+
 def decaying_softmax(shape, axis):
     rank = len(shape)
     max_val = shape[axis]
@@ -87,7 +134,7 @@ def unpack_into_tensorarray(value, axis, size=None):
     array = tf.TensorArray(dtype=dtype, size=array_size)
     dim_permutation = [axis] + range(1, axis) + [0] + range(axis + 1, rank)
     unpack_axis_major_value = tf.transpose(value, dim_permutation)
-    full_array = array.unpack(unpack_axis_major_value)
+    full_array = array.unstack(unpack_axis_major_value)
 
     return full_array
 
@@ -106,7 +153,7 @@ def pack_into_tensor(array, axis):
         the packed tensor
     """
 
-    packed_tensor = array.pack()
+    packed_tensor = array.stack()
     shape = packed_tensor.get_shape()
     rank = len(shape)
 
