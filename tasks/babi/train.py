@@ -90,7 +90,7 @@ if __name__ == '__main__':
             llprint("Building Computational Graph ... ")
 
             optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=momentum)
-            summerizer = tf.train.SummaryWriter(tb_logs_dir, session.graph)
+            summerizer = tf.summary.FileWriter(tb_logs_dir, session.graph)
 
             ncomputer = DNC(
                 RecurrentController,
@@ -118,13 +118,13 @@ if __name__ == '__main__':
                     gradients[i] = (tf.clip_by_value(grad, -10, 10), var)
             for (grad, var) in gradients:
                 if grad is not None:
-                    summeries.append(tf.histogram_summary(var.name + '/grad', grad))
+                    summeries.append(tf.summary.histogram(var.name + '/grad', grad))
 
             apply_gradients = optimizer.apply_gradients(gradients)
 
-            summeries.append(tf.scalar_summary("Loss", loss))
+            summeries.append(tf.summary.scalar(("Loss", loss))
 
-            summerize_op = tf.merge_summary(summeries)
+            summerize_op = tf.summary.merge(summeries)
             no_summerize = tf.no_op()
 
             llprint("Done!\n")
