@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
             apply_gradients = optimizer.apply_gradients(gradients)
 
-            summeries.append(tf.summary.scalar(("Loss", loss))
+            summeries.append(tf.summary.scalar("Loss", loss))
 
             summerize_op = tf.summary.merge(summeries)
             no_summerize = tf.no_op()
