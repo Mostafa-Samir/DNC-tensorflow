@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
             loss_weights = tf.placeholder(tf.float32, [batch_size, None, 1])
             loss = tf.reduce_mean(
-                loss_weights * tf.nn.softmax_cross_entropy_with_logits(output, ncomputer.target_output)
+                loss_weights * tf.nn.softmax_cross_entropy_with_logits(logits=output, labels=ncomputer.target_output)
             )
 
             summeries = []
