@@ -34,8 +34,8 @@ def prepare_sample(sample, target_code, word_space_size):
     output_vec[target_mask] = sample[0]['outputs']
     weights_vec[target_mask] = 1.0
 
-    input_vec = np.array([onehot(code, word_space_size) for code in input_vec])
-    output_vec = np.array([onehot(code, word_space_size) for code in output_vec])
+    input_vec = np.array([onehot(int(code), word_space_size) for code in input_vec])
+    output_vec = np.array([onehot(int(code), word_space_size) for code in output_vec])
 
     return (
         np.reshape(input_vec, (1, -1, word_space_size)),
