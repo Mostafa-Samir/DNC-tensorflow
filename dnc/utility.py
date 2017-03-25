@@ -29,7 +29,7 @@ def pairwise_add(u, v=None, is_batch=False):
     else:
         v_shape = v.get_shape().as_list()
         if u_shape != v_shape:
-            raise VauleError("Shapes %s and %s do not match" % (u_shape, v_shape))
+            raise ValueError("Shapes %s and %s do not match" % (u_shape, v_shape))
 
     n = u_shape[0] if not is_batch else u_shape[1]
 
