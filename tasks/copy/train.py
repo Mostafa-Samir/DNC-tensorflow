@@ -36,6 +36,8 @@ def binary_cross_entropy(predictions, targets):
 
 
 if __name__ == '__main__':
+    # no any training - just log graph
+    LOG_GRAPH_WITHOUT_OPTIMIZER = False
 
     dirname = os.path.dirname(__file__)
     ckpts_dir = os.path.join(dirname , 'checkpoints')
@@ -69,8 +71,6 @@ if __name__ == '__main__':
 
             llprint("Building Computational Graph ... ")
 
-            optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=momentum)
-
             ncomputer = DNC(
                 FeedforwardController,
                 input_size,
@@ -82,6 +82,11 @@ if __name__ == '__main__':
                 batch_size
             )
 
+            if LOG_GRAPH_WITHOUT_OPTIMIZER:
+                summerizer = tf.train.SummaryWriter(tb_logs_dir, session.graph)
+                session.run(tf.initialize_all_variables())
+                exit()
+
             # squash the DNC output between 0 and 1
             output, _ = ncomputer.get_outputs()
             squashed_output = tf.clip_by_value(tf.sigmoid(output), 1e-6, 1. - 1e-6)
@@ -90,6 +95,7 @@ if __name__ == '__main__':
 
             summeries = []
 
+            optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=momentum)
             gradients = optimizer.compute_gradients(loss)
             for i, (grad, var) in enumerate(gradients):
                 if grad is not None:
