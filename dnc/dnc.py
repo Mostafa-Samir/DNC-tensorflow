@@ -245,20 +245,21 @@ class DNC:
                     swap_memory=True
                 )
 
-        dependencies = []
-        if self.controller.has_recurrent_nn:
-            dependencies.append(self.controller.update_state(final_results[9]))
+        with tf.name_scope("dnc_output_packing"):
+            dependencies = []
+            if self.controller.has_recurrent_nn:
+                dependencies.append(self.controller.update_state(final_results[9]))
 
-        with tf.control_dependencies(dependencies):
-            self.packed_output = utility.pack_into_tensor(final_results[2], axis=1)
-            self.packed_memory_view = {
-                'free_gates': utility.pack_into_tensor(final_results[3], axis=1),
-                'allocation_gates': utility.pack_into_tensor(final_results[4], axis=1),
-                'write_gates': utility.pack_into_tensor(final_results[5], axis=1),
-                'read_weightings': utility.pack_into_tensor(final_results[6], axis=1),
-                'write_weightings': utility.pack_into_tensor(final_results[7], axis=1),
-                'usage_vectors': utility.pack_into_tensor(final_results[8], axis=1)
-            }
+            with tf.control_dependencies(dependencies):
+                self.packed_output = utility.pack_into_tensor(final_results[2], axis=1)
+                self.packed_memory_view = {
+                    'free_gates': utility.pack_into_tensor(final_results[3], axis=1),
+                    'allocation_gates': utility.pack_into_tensor(final_results[4], axis=1),
+                    'write_gates': utility.pack_into_tensor(final_results[5], axis=1),
+                    'read_weightings': utility.pack_into_tensor(final_results[6], axis=1),
+                    'write_weightings': utility.pack_into_tensor(final_results[7], axis=1),
+                    'usage_vectors': utility.pack_into_tensor(final_results[8], axis=1)
+                }
 
 
     def get_outputs(self):
