@@ -8,7 +8,7 @@ from . import utility
 class DNC:
 
     def __init__(self, controller_class, input_size, output_size, max_sequence_length,
-                 memory_words_num = 256, memory_word_size = 64, memory_read_heads = 4, batch_size = 1):
+                 memory_words_num = 256, memory_word_size = 64, memory_read_heads = 4, batch_size = 1, req_out_seq_length=0):
         """
         constructs a complete DNC architecture as described in the DNC paper
         http://www.nature.com/nature/journal/vaop/ncurrent/full/nature20101.html
@@ -31,11 +31,15 @@ class DNC:
             the number of read heads in the memory
         batch_size: int
             the size of the data batch
+        req_out_seq_length: int
+            required output sequence length, in case it not equal to input
+            sequence length
         """
 
         self.input_size = input_size
         self.output_size = output_size
         self.max_sequence_length = max_sequence_length
+        self.req_out_seq_length = req_out_seq_length
         self.words_num = memory_words_num
         self.word_size = memory_word_size
         self.read_heads = memory_read_heads
@@ -141,7 +145,22 @@ class DNC:
         Returns: Tuple containing all updated arguments
         """
 
-        step_input = self.unpacked_input_data.read(time)
+        # # tf.cond(pred, true_cond, false_cond
+        if self.req_out_seq_length > 0:
+            if self.output_size != self.input_size:
+                w_to_input = tf.get_variable("w_to_input", shape=[self.output_size, self.input_size])
+                step_input = tf.cond(
+                    time < self.sequence_length,
+                    lambda: self.unpacked_input_data.read(time),
+                    lambda: tf.matmul(outputs.read(time - 1), w_to_input))
+            else:
+                step_input = tf.cond(
+                    time < self.sequence_length,
+                    lambda: self.unpacked_input_data.read(time),
+                    lambda: outputs.read(time - 1))
+                step_input = tf.reshape(step_input, [-1, self.output_size])
+        else:
+            step_input = self.unpacked_input_data.read(time)
 
         output_list = self._step_op(step_input, memory_state, controller_state)
 
@@ -178,13 +197,14 @@ class DNC:
 
         self.unpacked_input_data = utility.unpack_into_tensorarray(self.input_data, 1, self.sequence_length)
 
-        outputs = tf.TensorArray(tf.float32, self.sequence_length)
-        free_gates = tf.TensorArray(tf.float32, self.sequence_length)
-        allocation_gates = tf.TensorArray(tf.float32, self.sequence_length)
-        write_gates = tf.TensorArray(tf.float32, self.sequence_length)
-        read_weightings = tf.TensorArray(tf.float32, self.sequence_length)
-        write_weightings = tf.TensorArray(tf.float32, self.sequence_length)
-        usage_vectors = tf.TensorArray(tf.float32, self.sequence_length)
+        seq_length_with_out_length = self.sequence_length + self.req_out_seq_length
+        outputs = tf.TensorArray(tf.float32, seq_length_with_out_length, clear_after_read=False)
+        free_gates = tf.TensorArray(tf.float32, seq_length_with_out_length)
+        allocation_gates = tf.TensorArray(tf.float32, seq_length_with_out_length)
+        write_gates = tf.TensorArray(tf.float32, seq_length_with_out_length)
+        read_weightings = tf.TensorArray(tf.float32, seq_length_with_out_length)
+        write_weightings = tf.TensorArray(tf.float32, seq_length_with_out_length)
+        usage_vectors = tf.TensorArray(tf.float32, seq_length_with_out_length)
 
         controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else (tf.zeros(1), tf.zeros(1))
         memory_state = self.memory.init_memory()
@@ -195,18 +215,32 @@ class DNC:
         with tf.variable_scope("sequence_loop") as scope:
             time = tf.constant(0, dtype=tf.int32)
 
-            final_results = tf.while_loop(
-                cond=lambda time, *_: time < self.sequence_length,
-                body=self._loop_body,
-                loop_vars=(
-                    time, memory_state, outputs,
-                    free_gates, allocation_gates, write_gates,
-                    read_weightings, write_weightings,
-                    usage_vectors, controller_state
-                ),
-                parallel_iterations=32,
-                swap_memory=True
-            )
+            if self.req_out_seq_length > 0:
+                final_results = tf.while_loop(
+                    cond=lambda time, *_: time < (self.sequence_length + self.req_out_seq_length),
+                    body=self._loop_body,
+                    loop_vars=(
+                        time, memory_state, outputs,
+                        free_gates, allocation_gates, write_gates,
+                        read_weightings, write_weightings,
+                        usage_vectors, controller_state
+                    ),
+                    parallel_iterations=1,
+                    swap_memory=False
+                )
+            else:
+                final_results = tf.while_loop(
+                    cond=lambda time, *_: time < self.sequence_length,
+                    body=self._loop_body,
+                    loop_vars=(
+                        time, memory_state, outputs,
+                        free_gates, allocation_gates, write_gates,
+                        read_weightings, write_weightings,
+                        usage_vectors, controller_state
+                    ),
+                    parallel_iterations=32,
+                    swap_memory=True
+                )
 
         dependencies = []
         if self.controller.has_recurrent_nn:
