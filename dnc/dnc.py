@@ -260,6 +260,8 @@ class DNC:
                     'write_weightings': utility.pack_into_tensor(final_results[7], axis=1),
                     'usage_vectors': utility.pack_into_tensor(final_results[8], axis=1)
                 }
+                for key, value in self.packed_memory_view.items():
+                    tf.summary.histogram(key, value)
 
 
     def get_outputs(self):
