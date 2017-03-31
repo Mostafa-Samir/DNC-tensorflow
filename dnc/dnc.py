@@ -1,13 +1,14 @@
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import LSTMStateTuple
-from memory import Memory
-import utility
 import os
+
+from .memory import Memory
+from . import utility
 
 class DNC:
 
     def __init__(self, controller_class, input_size, output_size, max_sequence_length,
-                 memory_words_num = 256, memory_word_size = 64, memory_read_heads = 4, batch_size = 1):
+                 memory_words_num = 256, memory_word_size = 64, memory_read_heads = 4, batch_size = 1, req_out_seq_length=0):
         """
         constructs a complete DNC architecture as described in the DNC paper
         http://www.nature.com/nature/journal/vaop/ncurrent/full/nature20101.html
@@ -30,25 +31,30 @@ class DNC:
             the number of read heads in the memory
         batch_size: int
             the size of the data batch
+        req_out_seq_length: int
+            required output sequence length, in case it not equal to input
+            sequence length
         """
 
-        self.input_size = input_size
-        self.output_size = output_size
-        self.max_sequence_length = max_sequence_length
-        self.words_num = memory_words_num
-        self.word_size = memory_word_size
-        self.read_heads = memory_read_heads
-        self.batch_size = batch_size
+        with tf.name_scope("dnc__init__"):
+            self.input_size = input_size
+            self.output_size = output_size
+            self.max_sequence_length = max_sequence_length
+            self.req_out_seq_length = req_out_seq_length
+            self.words_num = memory_words_num
+            self.word_size = memory_word_size
+            self.read_heads = memory_read_heads
+            self.batch_size = batch_size
 
-        self.memory = Memory(self.words_num, self.word_size, self.read_heads, self.batch_size)
-        self.controller = controller_class(self.input_size, self.output_size, self.read_heads, self.word_size, self.batch_size)
+            self.memory = Memory(self.words_num, self.word_size, self.read_heads, self.batch_size)
+            self.controller = controller_class(self.input_size, self.output_size, self.read_heads, self.word_size, self.batch_size)
 
-        # input data placeholders
-        self.input_data = tf.placeholder(tf.float32, [batch_size, None, input_size], name='input')
-        self.target_output = tf.placeholder(tf.float32, [batch_size, None, output_size], name='targets')
-        self.sequence_length = tf.placeholder(tf.int32, name='sequence_length')
+            # input data placeholders
+            self.input_data = tf.placeholder(tf.float32, [batch_size, None, input_size], name='input')
+            self.target_output = tf.placeholder(tf.float32, [batch_size, None, output_size], name='targets')
+            self.sequence_length = tf.placeholder(tf.int32, name='sequence_length')
 
-        self.build_graph()
+            self.build_graph()
 
 
     def _step_op(self, step, memory_state, controller_state=None):
@@ -68,55 +74,56 @@ class DNC:
             memory_view: dict
         """
 
-        last_read_vectors = memory_state[6]
-        pre_output, interface, nn_state = None, None, None
+        with tf.name_scope("dnc__step_op"):
+            last_read_vectors = memory_state[6]
+            pre_output, interface, nn_state = None, None, None
 
-        if self.controller.has_recurrent_nn:
-            pre_output, interface, nn_state = self.controller.process_input(step, last_read_vectors, controller_state)
-        else:
-            pre_output, interface = self.controller.process_input(step, last_read_vectors)
+            if self.controller.has_recurrent_nn:
+                pre_output, interface, nn_state = self.controller.process_input(step, last_read_vectors, controller_state)
+            else:
+                pre_output, interface = self.controller.process_input(step, last_read_vectors)
 
-        usage_vector, write_weighting, memory_matrix, link_matrix, precedence_vector = self.memory.write(
-            memory_state[0], memory_state[1], memory_state[5],
-            memory_state[4], memory_state[2], memory_state[3],
-            interface['write_key'],
-            interface['write_strength'],
-            interface['free_gates'],
-            interface['allocation_gate'],
-            interface['write_gate'],
-            interface['write_vector'],
-            interface['erase_vector']
-        )
+            usage_vector, write_weighting, memory_matrix, link_matrix, precedence_vector = self.memory.write(
+                memory_state[0], memory_state[1], memory_state[5],
+                memory_state[4], memory_state[2], memory_state[3],
+                interface['write_key'],
+                interface['write_strength'],
+                interface['free_gates'],
+                interface['allocation_gate'],
+                interface['write_gate'],
+                interface['write_vector'],
+                interface['erase_vector']
+            )
 
-        read_weightings, read_vectors = self.memory.read(
-            memory_matrix,
-            memory_state[5],
-            interface['read_keys'],
-            interface['read_strengths'],
-            link_matrix,
-            interface['read_modes'],
-        )
+            read_weightings, read_vectors = self.memory.read(
+                memory_matrix,
+                memory_state[5],
+                interface['read_keys'],
+                interface['read_strengths'],
+                link_matrix,
+                interface['read_modes'],
+            )
 
-        return [
+            return [
 
-            # report new memory state to be updated outside the condition branch
-            memory_matrix,
-            usage_vector,
-            precedence_vector,
-            link_matrix,
-            write_weighting,
-            read_weightings,
-            read_vectors,
+                # report new memory state to be updated outside the condition branch
+                memory_matrix,
+                usage_vector,
+                precedence_vector,
+                link_matrix,
+                write_weighting,
+                read_weightings,
+                read_vectors,
 
-            self.controller.final_output(pre_output, read_vectors),
-            interface['free_gates'],
-            interface['allocation_gate'],
-            interface['write_gate'],
+                self.controller.final_output(pre_output, read_vectors),
+                interface['free_gates'],
+                interface['allocation_gate'],
+                interface['write_gate'],
 
-            # report new state of RNN if exists
-            nn_state[0] if nn_state is not None else tf.zeros(1),
-            nn_state[1] if nn_state is not None else tf.zeros(1)
-        ]
+                # report new state of RNN if exists
+                nn_state[0] if nn_state is not None else tf.zeros(1),
+                nn_state[1] if nn_state is not None else tf.zeros(1)
+            ]
 
 
     def _loop_body(self, time, memory_state, outputs, free_gates, allocation_gates, write_gates,
@@ -140,33 +147,48 @@ class DNC:
         Returns: Tuple containing all updated arguments
         """
 
-        step_input = self.unpacked_input_data.read(time)
+        with tf.name_scope("dnc_loop_body"):
+            if self.req_out_seq_length > 0:
+                if self.output_size != self.input_size:
+                    w_to_input = tf.get_variable("w_to_input", shape=[self.output_size, self.input_size])
+                    step_input = tf.cond(
+                        time < self.sequence_length,
+                        lambda: self.unpacked_input_data.read(time),
+                        lambda: tf.matmul(outputs.read(time - 1), w_to_input))
+                else:
+                    step_input = tf.cond(
+                        time < self.sequence_length,
+                        lambda: self.unpacked_input_data.read(time),
+                        lambda: outputs.read(time - 1))
+                    step_input = tf.reshape(step_input, [-1, self.output_size])
+            else:
+                step_input = self.unpacked_input_data.read(time)
 
-        output_list = self._step_op(step_input, memory_state, controller_state)
+            output_list = self._step_op(step_input, memory_state, controller_state)
 
-        # update memory parameters
+            # update memory parameters
 
-        new_controller_state = tf.zeros(1)
-        new_memory_state = tuple(output_list[0:7])
+            new_controller_state = tf.zeros(1)
+            new_memory_state = tuple(output_list[0:7])
 
-        new_controller_state = LSTMStateTuple(output_list[11], output_list[12])
+            new_controller_state = LSTMStateTuple(output_list[11], output_list[12])
 
-        outputs = outputs.write(time, output_list[7])
+            outputs = outputs.write(time, output_list[7])
 
-        # collecting memory view for the current step
-        free_gates = free_gates.write(time, output_list[8])
-        allocation_gates = allocation_gates.write(time, output_list[9])
-        write_gates = write_gates.write(time, output_list[10])
-        read_weightings = read_weightings.write(time, output_list[5])
-        write_weightings = write_weightings.write(time, output_list[4])
-        usage_vectors = usage_vectors.write(time, output_list[1])
+            # collecting memory view for the current step
+            free_gates = free_gates.write(time, output_list[8])
+            allocation_gates = allocation_gates.write(time, output_list[9])
+            write_gates = write_gates.write(time, output_list[10])
+            read_weightings = read_weightings.write(time, output_list[5])
+            write_weightings = write_weightings.write(time, output_list[4])
+            usage_vectors = usage_vectors.write(time, output_list[1])
 
-        return (
-            time + 1, new_memory_state, outputs,
-            free_gates,allocation_gates, write_gates,
-            read_weightings, write_weightings,
-            usage_vectors, new_controller_state
-        )
+            return (
+                time + 1, new_memory_state, outputs,
+                free_gates,allocation_gates, write_gates,
+                read_weightings, write_weightings,
+                usage_vectors, new_controller_state
+            )
 
 
     def build_graph(self):
@@ -175,52 +197,71 @@ class DNC:
         of the input data batches
         """
 
-        self.unpacked_input_data = utility.unpack_into_tensorarray(self.input_data, 1, self.sequence_length)
+        with tf.name_scope("dnc_build_graph_initialize_vars"):
+            self.unpacked_input_data = utility.unpack_into_tensorarray(self.input_data, 1, self.sequence_length)
 
-        outputs = tf.TensorArray(tf.float32, self.sequence_length)
-        free_gates = tf.TensorArray(tf.float32, self.sequence_length)
-        allocation_gates = tf.TensorArray(tf.float32, self.sequence_length)
-        write_gates = tf.TensorArray(tf.float32, self.sequence_length)
-        read_weightings = tf.TensorArray(tf.float32, self.sequence_length)
-        write_weightings = tf.TensorArray(tf.float32, self.sequence_length)
-        usage_vectors = tf.TensorArray(tf.float32, self.sequence_length)
+            seq_length_with_out_length = self.sequence_length + self.req_out_seq_length
+            outputs = tf.TensorArray(tf.float32, seq_length_with_out_length, clear_after_read=False)
+            free_gates = tf.TensorArray(tf.float32, seq_length_with_out_length)
+            allocation_gates = tf.TensorArray(tf.float32, seq_length_with_out_length)
+            write_gates = tf.TensorArray(tf.float32, seq_length_with_out_length)
+            read_weightings = tf.TensorArray(tf.float32, seq_length_with_out_length)
+            write_weightings = tf.TensorArray(tf.float32, seq_length_with_out_length)
+            usage_vectors = tf.TensorArray(tf.float32, seq_length_with_out_length)
 
-        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else (tf.zeros(1), tf.zeros(1))
-        memory_state = self.memory.init_memory()
-        if not isinstance(controller_state, LSTMStateTuple):
-            controller_state = LSTMStateTuple(controller_state[0], controller_state[1])
-        final_results = None
+            controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else (tf.zeros(1), tf.zeros(1))
+            memory_state = self.memory.init_memory()
+            if not isinstance(controller_state, LSTMStateTuple):
+                controller_state = LSTMStateTuple(controller_state[0], controller_state[1])
+            final_results = None
 
         with tf.variable_scope("sequence_loop") as scope:
             time = tf.constant(0, dtype=tf.int32)
 
-            final_results = tf.while_loop(
-                cond=lambda time, *_: time < self.sequence_length,
-                body=self._loop_body,
-                loop_vars=(
-                    time, memory_state, outputs,
-                    free_gates, allocation_gates, write_gates,
-                    read_weightings, write_weightings,
-                    usage_vectors, controller_state
-                ),
-                parallel_iterations=32,
-                swap_memory=True
-            )
+            if self.req_out_seq_length > 0:
+                final_results = tf.while_loop(
+                    cond=lambda time, *_: time < (self.sequence_length + self.req_out_seq_length),
+                    body=self._loop_body,
+                    loop_vars=(
+                        time, memory_state, outputs,
+                        free_gates, allocation_gates, write_gates,
+                        read_weightings, write_weightings,
+                        usage_vectors, controller_state
+                    ),
+                    parallel_iterations=1,
+                    swap_memory=False
+                )
+            else:
+                final_results = tf.while_loop(
+                    cond=lambda time, *_: time < self.sequence_length,
+                    body=self._loop_body,
+                    loop_vars=(
+                        time, memory_state, outputs,
+                        free_gates, allocation_gates, write_gates,
+                        read_weightings, write_weightings,
+                        usage_vectors, controller_state
+                    ),
+                    parallel_iterations=32,
+                    swap_memory=True
+                )
 
-        dependencies = []
-        if self.controller.has_recurrent_nn:
-            dependencies.append(self.controller.update_state(final_results[9]))
+        with tf.name_scope("dnc_output_packing"):
+            dependencies = []
+            if self.controller.has_recurrent_nn:
+                dependencies.append(self.controller.update_state(final_results[9]))
 
-        with tf.control_dependencies(dependencies):
-            self.packed_output = utility.pack_into_tensor(final_results[2], axis=1)
-            self.packed_memory_view = {
-                'free_gates': utility.pack_into_tensor(final_results[3], axis=1),
-                'allocation_gates': utility.pack_into_tensor(final_results[4], axis=1),
-                'write_gates': utility.pack_into_tensor(final_results[5], axis=1),
-                'read_weightings': utility.pack_into_tensor(final_results[6], axis=1),
-                'write_weightings': utility.pack_into_tensor(final_results[7], axis=1),
-                'usage_vectors': utility.pack_into_tensor(final_results[8], axis=1)
-            }
+            with tf.control_dependencies(dependencies):
+                self.packed_output = utility.pack_into_tensor(final_results[2], axis=1)
+                self.packed_memory_view = {
+                    'free_gates': utility.pack_into_tensor(final_results[3], axis=1),
+                    'allocation_gates': utility.pack_into_tensor(final_results[4], axis=1),
+                    'write_gates': utility.pack_into_tensor(final_results[5], axis=1),
+                    'read_weightings': utility.pack_into_tensor(final_results[6], axis=1),
+                    'write_weightings': utility.pack_into_tensor(final_results[7], axis=1),
+                    'usage_vectors': utility.pack_into_tensor(final_results[8], axis=1)
+                }
+                for key, value in self.packed_memory_view.items():
+                    tf.summary.histogram(key, value)
 
 
     def get_outputs(self):
@@ -231,7 +272,8 @@ class DNC:
             outputs: Tensor (batch_size, time_steps, output_size)
             memory_view: dict
         """
-        return self.packed_output, self.packed_memory_view
+        with tf.name_scope("dnc_get_outputs"):
+            return self.packed_output, self.packed_memory_view
 
 
     def save(self, session, ckpts_dir, name):

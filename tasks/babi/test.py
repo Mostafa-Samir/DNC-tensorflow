@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 
 from recurrent_controller import RecurrentController
 from dnc.dnc import DNC
@@ -120,9 +121,9 @@ with graph.as_default():
             tasks_results[task_number] = error_rate
             llprint("\r%s ... %.3f%% Error Rate.\n" % (task_name, error_rate * 100))
         
-        print "\n"
-        print "%-27s%-27s%s" % ("Task", "Result", "Paper's Mean")
-        print "-------------------------------------------------------------------"
+        print("\n")
+        print("%-27s%-27s%s" % ("Task", "Result", "Paper's Mean"))
+        print("-------------------------------------------------------------------")
         paper_means = {
             '1': '9.0±12.6%', '2': '39.2±20.5%', '3': '39.6±16.4%',
             '4': '0.4±0.7%', '5': '1.5±1.0%', '6': '6.9±7.5%', '7': '9.8±7.0%',
@@ -134,11 +135,11 @@ with graph.as_default():
         for k in range(20):
             task_id = str(k + 1)
             task_result = "%.2f%%" % (tasks_results[task_id] * 100)
-            print "%-27s%-27s%s" % (tasks_names[task_id], task_result, paper_means[task_id])
-        print "-------------------------------------------------------------------"
+            print("%-27s%-27s%s" % (tasks_names[task_id], task_result, paper_means[task_id]))
+        print("-------------------------------------------------------------------")
         all_tasks_results = [v for _,v in tasks_results.iteritems()]
         results_mean = "%.2f%%" % (np.mean(all_tasks_results) * 100)
         failed_count = "%d" % (np.sum(np.array(all_tasks_results) > 0.05))
         
-        print "%-27s%-27s%s" % ("Mean Err.", results_mean, paper_means['mean'])
-        print "%-27s%-27s%s" % ("Failed (err. > 5%)", failed_count, paper_means['fail'])
+        print("%-27s%-27s%s" % ("Mean Err.", results_mean, paper_means['mean']))
+        print("%-27s%-27s%s" % ("Failed (err. > 5%)", failed_count, paper_means['fail']))
