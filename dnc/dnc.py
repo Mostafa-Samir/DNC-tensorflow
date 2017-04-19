@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import LSTMStateTuple
+from tensorflow.contrib.rnn.python.ops.core_rnn_cell import LSTMStateTuple
 from memory import Memory
 import utility
 import os

@@ -34,13 +34,13 @@ def pairwise_add(u, v=None, is_batch=False):
     n = u_shape[0] if not is_batch else u_shape[1]
 
     column_u = tf.reshape(u, (-1, 1) if not is_batch else (-1, n, 1))
-    U = tf.concat(1 if not is_batch else 2, [column_u] * n)
+    U = tf.concat([column_u] * n, 1 if not is_batch else 2)
 
     if v is u:
         return U + tf.transpose(U, None if not is_batch else [0, 2, 1])
     else:
         row_v = tf.reshape(v, (1, -1) if not is_batch else (-1, 1, n))
-        V = tf.concat(0 if not is_batch else 1, [row_v] * n)
+        V = tf.concat([row_v] * n, 0 if not is_batch else 1)
 
         return U + V
 
@@ -87,7 +87,7 @@ def unpack_into_tensorarray(value, axis, size=None):
     array = tf.TensorArray(dtype=dtype, size=array_size)
     dim_permutation = [axis] + range(1, axis) + [0] + range(axis + 1, rank)
     unpack_axis_major_value = tf.transpose(value, dim_permutation)
-    full_array = array.unpack(unpack_axis_major_value)
+    full_array = array.unstack(unpack_axis_major_value)
 
     return full_array
 
@@ -106,7 +106,7 @@ def pack_into_tensor(array, axis):
         the packed tensor
     """
 
-    packed_tensor = array.pack()
+    packed_tensor = array.stack()
     shape = packed_tensor.get_shape()
     rank = len(shape)
 

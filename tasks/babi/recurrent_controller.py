@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.rnn.python.ops.core_rnn_cell import BasicLSTMCell
 from dnc.controller import BaseController
 
 """
@@ -11,7 +12,7 @@ the state to reset to zero on every input sequnece
 class RecurrentController(BaseController):
 
     def network_vars(self):
-        self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(256)
+        self.lstm_cell = BasicLSTMCell(256)
         self.state = self.lstm_cell.zero_state(self.batch_size, tf.float32)
 
     def network_op(self, X, state):

@@ -190,7 +190,7 @@ class BaseController:
         """
 
         flat_read_vectors = tf.reshape(last_read_vectors, (-1, self.word_size * self.read_heads))
-        complete_input = tf.concat(1, [X, flat_read_vectors])
+        complete_input = tf.concat([X, flat_read_vectors], 1)
         nn_output, nn_state = None, None
 
         if self.has_recurrent_nn:

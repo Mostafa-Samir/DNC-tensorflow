@@ -74,7 +74,7 @@ class Memory:
         normalized_memory = tf.nn.l2_normalize(memory_matrix, 2)
         normalized_keys = tf.nn.l2_normalize(keys, 1)
 
-        similiarity = tf.batch_matmul(normalized_memory, normalized_keys)
+        similiarity = tf.matmul(normalized_memory, normalized_keys)
         strengths = tf.expand_dims(strengths, 1)
 
         return tf.nn.softmax(similiarity * strengths, 1)
@@ -131,7 +131,7 @@ class Memory:
             flat_unordered_allocation_weighting
         )
 
-        packed_wightings = flat_ordered_weightings.pack()
+        packed_wightings = flat_ordered_weightings.stack()
         return tf.reshape(packed_wightings, (self.batch_size, self.words_num))
 
 
@@ -188,8 +188,8 @@ class Memory:
         write_vector = tf.expand_dims(write_vector, 1)
         erase_vector = tf.expand_dims(erase_vector, 1)
 
-        erasing = memory_matrix * (1 - tf.batch_matmul(write_weighting, erase_vector))
-        writing = tf.batch_matmul(write_weighting, write_vector)
+        erasing = memory_matrix * (1 - tf.matmul(write_weighting, erase_vector))
+        writing = tf.matmul(write_weighting, write_vector)
         updated_memory = erasing + writing
 
         return updated_memory
@@ -239,7 +239,7 @@ class Memory:
         precedence_vector = tf.expand_dims(precedence_vector, 1)
 
         reset_factor = 1 - utility.pairwise_add(write_weighting, is_batch=True)
-        updated_link_matrix = reset_factor * link_matrix + tf.batch_matmul(write_weighting, precedence_vector)
+        updated_link_matrix = reset_factor * link_matrix + tf.matmul(write_weighting, precedence_vector)
         updated_link_matrix = (1 - self.I) * updated_link_matrix  # eliminates self-links
 
         return updated_link_matrix
@@ -262,8 +262,8 @@ class Memory:
             backward weighting: Tensor (batch_size, words_num, read_heads)
         """
 
-        forward_weighting = tf.batch_matmul(link_matrix, read_weightings)
-        backward_weighting = tf.batch_matmul(link_matrix, read_weightings, adj_x=True)
+        forward_weighting = tf.matmul(link_matrix, read_weightings)
+        backward_weighting = tf.matmul(link_matrix, read_weightings, adjoint_a=True)
 
         return forward_weighting, backward_weighting
 
@@ -308,7 +308,7 @@ class Memory:
         Returns: Tensor (word_size, read_heads)
         """
 
-        updated_read_vectors = tf.batch_matmul(memory_matrix, read_weightings, adj_x=True)
+        updated_read_vectors = tf.matmul(memory_matrix, read_weightings, adjoint_a=True)
 
         return updated_read_vectors
 
