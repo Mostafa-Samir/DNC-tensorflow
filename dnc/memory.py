@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import utility
 
+
 class Memory:
 
     def __init__(self, words_num=256, word_size=64, read_heads=4, batch_size=1):
@@ -31,7 +32,7 @@ class Memory:
         # a words_num x words_num identity matrix
         self.I = tf.constant(np.identity(words_num, dtype=np.float32))
 
-        # maps the indecies from the 2D array of free list per batch to
+        # maps the indices from the 2D array of free list per batch to
         # their corresponding values in the flat 1D array of ordered_allocation_weighting
         self.index_mapper = tf.constant(
             np.cumsum([0] + [words_num] * (batch_size - 1), dtype=np.int32)[:, np.newaxis]
@@ -54,9 +55,10 @@ class Memory:
             tf.fill([self.batch_size, self.word_size, self.read_heads], 1e-6),  # initial read vectors
         )
 
-    def get_lookup_weighting(self, memory_matrix, keys, strengths):
+    @staticmethod
+    def get_lookup_weighting(memory_matrix, keys, strengths):
         """
-        retrives a content-based adderssing weighting given the keys
+        retrieves a content-based addressing weighting given the keys
 
         Parameters:
         ----------
@@ -74,15 +76,15 @@ class Memory:
         normalized_memory = tf.nn.l2_normalize(memory_matrix, 2)
         normalized_keys = tf.nn.l2_normalize(keys, 1)
 
-        similiarity = tf.batch_matmul(normalized_memory, normalized_keys)
+        similarity = tf.batch_matmul(normalized_memory, normalized_keys)
         strengths = tf.expand_dims(strengths, 1)
 
-        return tf.nn.softmax(similiarity * strengths, 1)
+        return tf.nn.softmax(similarity * strengths, 1)
 
-
-    def update_usage_vector(self, usage_vector, read_weightings, write_weighting, free_gates):
+    @staticmethod
+    def update_usage_vector(usage_vector, read_weightings, write_weighting, free_gates):
         """
-        updates and returns the usgae vector given the values of the free gates
+        updates and returns the usage vector given the values of the free gates
         and the usage_vector, read_weightings, write_weighting from previous step
 
         Parameters:
@@ -98,27 +100,26 @@ class Memory:
         free_gates = tf.expand_dims(free_gates, 1)
 
         retention_vector = tf.reduce_prod(1 - read_weightings * free_gates, 2)
-        updated_usage = (usage_vector + write_weighting - usage_vector * write_weighting)  * retention_vector
+        updated_usage = (usage_vector + write_weighting - usage_vector * write_weighting) * retention_vector
 
         return updated_usage
 
-
     def get_allocation_weighting(self, sorted_usage, free_list):
         """
-        retreives the writing allocation weighting based on the usage free list
+        retrieves the writing allocation weighting based on the usage free list
 
         Parameters:
         ----------
         sorted_usage: Tensor (batch_size, words_num, )
-            the usage vector sorted ascndingly
+            the usage vector sorted in ascending order
         free_list: Tensor (batch, words_num, )
-            the original indecies of the sorted usage vector
+            the original indices of the sorted usage vector
 
         Returns: Tensor (batch_size, words_num, )
             the allocation weighting for each word in memory
         """
 
-        shifted_cumprod = tf.cumprod(sorted_usage, axis = 1, exclusive=True)
+        shifted_cumprod = tf.cumprod(sorted_usage, axis=1, exclusive=True)
         unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
 
         mapped_free_list = free_list + self.index_mapper
@@ -131,11 +132,11 @@ class Memory:
             flat_unordered_allocation_weighting
         )
 
-        packed_wightings = flat_ordered_weightings.pack()
-        return tf.reshape(packed_wightings, (self.batch_size, self.words_num))
+        packed_weightings = flat_ordered_weightings.pack()
+        return tf.reshape(packed_weightings, (self.batch_size, self.words_num))
 
-
-    def update_write_weighting(self, lookup_weighting, allocation_weighting, write_gate, allocation_gate):
+    @staticmethod
+    def update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate):
         """
         updates and returns the current write_weighting
 
@@ -157,12 +158,13 @@ class Memory:
         # remove the dimension of 1 from the lookup_weighting
         lookup_weighting = tf.squeeze(lookup_weighting)
 
-        updated_write_weighting = write_gate * (allocation_gate * allocation_weighting + (1 - allocation_gate) * lookup_weighting)
+        updated_write_weighting = write_gate * (
+                    allocation_gate * allocation_weighting + (1 - allocation_gate) * lookup_weighting)
 
         return updated_write_weighting
 
-
-    def update_memory(self, memory_matrix, write_weighting, write_vector, erase_vector):
+    @staticmethod
+    def update_memory(memory_matrix, write_weighting, write_vector, erase_vector):
         """
         updates and returns the memory matrix given the weighting, write and erase vectors
         and the memory matrix from previous step
@@ -194,8 +196,8 @@ class Memory:
 
         return updated_memory
 
-
-    def update_precedence_vector(self, precedence_vector, write_weighting):
+    @staticmethod
+    def update_precedence_vector(precedence_vector, write_weighting):
         """
         updates the precedence vector given the latest write weighting
         and the precedence_vector from last step
@@ -215,7 +217,6 @@ class Memory:
         updated_precedence_vector = reset_factor * precedence_vector + write_weighting
 
         return updated_precedence_vector
-
 
     def update_link_matrix(self, precedence_vector, link_matrix, write_weighting):
         """
@@ -244,8 +245,8 @@ class Memory:
 
         return updated_link_matrix
 
-
-    def get_directional_weightings(self, read_weightings, link_matrix):
+    @staticmethod
+    def get_directional_weightings(read_weightings, link_matrix):
         """
         computes and returns the forward and backward reading weightings
         given the read_weightings from the previous step
@@ -267,8 +268,8 @@ class Memory:
 
         return forward_weighting, backward_weighting
 
-
-    def update_read_weightings(self, lookup_weightings, forward_weighting, backward_weighting, read_mode):
+    @staticmethod
+    def update_read_weightings(lookup_weightings, forward_weighting, backward_weighting, read_mode):
         """
         updates and returns the current read_weightings
 
@@ -280,7 +281,7 @@ class Memory:
             the forward direction read weighting
         backward_weighting: Tensor (batch_size, words_num, read_heads)
             the backward direction read weighting
-        read_mode: Tesnor (batch_size, 3, read_heads)
+        read_mode: Tensor (batch_size, 3, read_heads)
             the softmax distribution between the three read modes
 
         Returns: Tensor (batch_size, words_num, read_heads)
@@ -293,8 +294,8 @@ class Memory:
 
         return updated_read_weightings
 
-
-    def update_read_vectors(self, memory_matrix, read_weightings):
+    @staticmethod
+    def update_read_vectors(memory_matrix, read_weightings):
         """
         reads, updates, and returns the read vectors of the recently updated memory
 
@@ -312,12 +313,11 @@ class Memory:
 
         return updated_read_vectors
 
-
     def write(self, memory_matrix, usage_vector, read_weightings, write_weighting,
-              precedence_vector, link_matrix,  key, strength, free_gates,
+              precedence_vector, link_matrix, key, strength, free_gates,
               allocation_gate, write_gate, write_vector, erase_vector):
         """
-        defines the complete pipeline of writing to memory gievn the write variables
+        defines the complete pipeline of writing to memory given the write variables
         and the memory_matrix, usage_vector, link_matrix, and precedence_vector from
         previous step
 
@@ -340,9 +340,9 @@ class Memory:
         strength: (batch_size, 1)
             the strength of the query key
         free_gates: Tensor (batch_size, read_heads)
-            the degree to which location at read haeds will be freed
+            the degree to which location at read heads will be freed
         allocation_gate: (batch_size, 1)
-            the fraction of writing that is being allocated in a new locatio
+            the fraction of writing that is being allocated in a new location
         write_gate: (batch_size, 1)
             the amount of information to be written to memory
         write_vector: Tensor (batch_size, word_size)
@@ -365,13 +365,13 @@ class Memory:
         sorted_usage = -1 * sorted_usage
 
         allocation_weighting = self.get_allocation_weighting(sorted_usage, free_list)
-        new_write_weighting = self.update_write_weighting(lookup_weighting, allocation_weighting, write_gate, allocation_gate)
+        new_write_weighting = self.update_write_weighting(lookup_weighting, allocation_weighting, write_gate,
+                                                          allocation_gate)
         new_memory_matrix = self.update_memory(memory_matrix, new_write_weighting, write_vector, erase_vector)
         new_link_matrix = self.update_link_matrix(precedence_vector, link_matrix, new_write_weighting)
         new_precedence_vector = self.update_precedence_vector(precedence_vector, new_write_weighting)
 
         return new_usage_vector, new_write_weighting, new_memory_matrix, new_link_matrix, new_precedence_vector
-
 
     def read(self, memory_matrix, read_weightings, keys, strengths, link_matrix, read_modes):
         """
@@ -384,7 +384,7 @@ class Memory:
         read_weightings: Tensor (batch_size, words_num, read_heads)
             the read weightings form the last time step
         keys: Tensor (batch_size, word_size, read_heads)
-            the kyes to query the memory locations with
+            the keys to query the memory locations with
         strengths: Tensor (batch_size, read_heads)
             the strength of each read key
         link_matrix: Tensor (batch_size, words_num, words_num)
@@ -399,7 +399,8 @@ class Memory:
 
         lookup_weighting = self.get_lookup_weighting(memory_matrix, keys, strengths)
         forward_weighting, backward_weighting = self.get_directional_weightings(read_weightings, link_matrix)
-        new_read_weightings = self.update_read_weightings(lookup_weighting, forward_weighting, backward_weighting, read_modes)
+        new_read_weightings = self.update_read_weightings(lookup_weighting, forward_weighting, backward_weighting,
+                                                          read_modes)
         new_read_vectors = self.update_read_vectors(memory_matrix, new_read_weightings)
 
         return new_read_weightings, new_read_vectors

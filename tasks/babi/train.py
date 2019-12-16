@@ -1,4 +1,5 @@
 import warnings
+
 warnings.filterwarnings('ignore')
 
 import tensorflow as tf
@@ -12,17 +13,21 @@ import os
 from dnc.dnc import DNC
 from recurrent_controller import RecurrentController
 
+
 def llprint(message):
     sys.stdout.write(message)
     sys.stdout.flush()
 
+
 def load(path):
     return pickle.load(open(path, 'rb'))
+
 
 def onehot(index, size):
     vec = np.zeros(size, dtype=np.float32)
     vec[index] = 1.0
     return vec
+
 
 def prepare_sample(sample, target_code, word_space_size):
     input_vec = np.array(sample[0]['inputs'], dtype=np.float32)
@@ -31,11 +36,13 @@ def prepare_sample(sample, target_code, word_space_size):
     weights_vec = np.zeros(seq_len, dtype=np.float32)
 
     target_mask = (input_vec == target_code)
+    print "Target mask: ", input_vec == target_code
     output_vec[target_mask] = sample[0]['outputs']
+    print "Output Vector: ", sample[0]['outputs']
     weights_vec[target_mask] = 1.0
 
-    input_vec = np.array([onehot(code, word_space_size) for code in input_vec])
-    output_vec = np.array([onehot(code, word_space_size) for code in output_vec])
+    input_vec = np.array([onehot(int(code), word_space_size) for code in input_vec])
+    output_vec = np.array([onehot(int(code), word_space_size) for code in output_vec])
 
     return (
         np.reshape(input_vec, (1, -1, word_space_size)),
@@ -45,11 +52,10 @@ def prepare_sample(sample, target_code, word_space_size):
     )
 
 
-
 if __name__ == '__main__':
 
     dirname = os.path.dirname(__file__)
-    ckpts_dir = os.path.join(dirname , 'checkpoints')
+    ckpts_dir = os.path.join(dirname, 'checkpoints')
     data_dir = os.path.join(dirname, 'data', 'en-10k')
     tb_logs_dir = os.path.join(dirname, 'logs')
 
@@ -71,9 +77,10 @@ if __name__ == '__main__':
 
     from_checkpoint = None
     iterations = 100000
+
     start_step = 0
 
-    options,_ = getopt.getopt(sys.argv[1:], '', ['checkpoint=', 'iterations=', 'start='])
+    options, _ = getopt.getopt(sys.argv[1:], '', ['checkpoint=', 'iterations=', 'start='])
 
     for opt in options:
         if opt[0] == '--checkpoint':
@@ -90,7 +97,7 @@ if __name__ == '__main__':
             llprint("Building Computational Graph ... ")
 
             optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=momentum)
-            summerizer = tf.train.SummaryWriter(tb_logs_dir, session.graph)
+            summarizer = tf.summary.FileWriter(tb_logs_dir, session.graph)
 
             ncomputer = DNC(
                 RecurrentController,
@@ -110,7 +117,7 @@ if __name__ == '__main__':
                 loss_weights * tf.nn.softmax_cross_entropy_with_logits(output, ncomputer.target_output)
             )
 
-            summeries = []
+            summaries = []
 
             gradients = optimizer.compute_gradients(loss)
             for i, (grad, var) in enumerate(gradients):
@@ -118,26 +125,25 @@ if __name__ == '__main__':
                     gradients[i] = (tf.clip_by_value(grad, -10, 10), var)
             for (grad, var) in gradients:
                 if grad is not None:
-                    summeries.append(tf.histogram_summary(var.name + '/grad', grad))
+                    summaries.append(tf.summary.histogram(var.name + '/grad', grad))
 
             apply_gradients = optimizer.apply_gradients(gradients)
 
-            summeries.append(tf.scalar_summary("Loss", loss))
+            summaries.append(tf.summary.scalar("Loss", loss))
 
-            summerize_op = tf.merge_summary(summeries)
-            no_summerize = tf.no_op()
+            summarize_op = tf.summary.merge(summaries)
+            no_summarize = tf.no_op()
 
             llprint("Done!\n")
 
             llprint("Initializing Variables ... ")
-            session.run(tf.initialize_all_variables())
+            session.run(tf.global_variables_initializer())
             llprint("Done!\n")
 
             if from_checkpoint is not None:
-                llprint("Restoring Checkpoint %s ... " % (from_checkpoint))
+                llprint("Restoring Checkpoint %s ... " % from_checkpoint)
                 ncomputer.restore(session, ckpts_dir, from_checkpoint)
                 llprint("Done!\n")
-
 
             last_100_losses = []
 
@@ -154,15 +160,20 @@ if __name__ == '__main__':
                     llprint("\rIteration %d/%d" % (i, end))
 
                     sample = np.random.choice(data, 1)
-                    input_data, target_output, seq_len, weights = prepare_sample(sample, lexicon_dict['-'], word_space_size)
+                    input_data, target_output, seq_len, weights = prepare_sample(sample, lexicon_dict['-'],
+                                                                                 word_space_size)
+                    print sample
+                    print "Target code", lexicon_dict['-']
+                    print "Input data: ", input_data
+                    print "Output target: ", target_output
 
-                    summerize = (i % 100 == 0)
+                    summarize = (i % 100 == 0)
                     take_checkpoint = (i != 0) and (i % end == 0)
 
                     loss_value, _, summary = session.run([
                         loss,
                         apply_gradients,
-                        summerize_op if summerize else no_summerize
+                        summarize_op if summarize else no_summarize
                     ], feed_dict={
                         ncomputer.input_data: input_data,
                         ncomputer.target_output: target_output,
@@ -171,9 +182,9 @@ if __name__ == '__main__':
                     })
 
                     last_100_losses.append(loss_value)
-                    summerizer.add_summary(summary, i)
+                    summarizer.add_summary(summary, i)
 
-                    if summerize:
+                    if summarize:
                         llprint("\n\tAvg. Cross-Entropy: %.7f\n" % (np.mean(last_100_losses)))
 
                         end_time_100 = time.time()
@@ -182,20 +193,20 @@ if __name__ == '__main__':
                         avg_100_time += (1. / avg_counter) * (elapsed_time - avg_100_time)
                         estimated_time = (avg_100_time * ((end - i) / 100.)) / 60.
 
-                        print "\tAvg. 100 iterations time: %.2f minutes" % (avg_100_time)
-                        print "\tApprox. time to completion: %.2f hours" % (estimated_time)
+                        print "\tAvg. 100 iterations time: %.2f minutes" % avg_100_time
+                        print "\tApprox. time to completion: %.2f hours" % estimated_time
 
                         start_time_100 = time.time()
                         last_100_losses = []
 
                     if take_checkpoint:
                         llprint("\nSaving Checkpoint ... "),
-                        ncomputer.save(session, ckpts_dir, 'step-%d' % (i))
+                        ncomputer.save(session, ckpts_dir, 'step-%d' % i)
                         llprint("Done!\n")
 
                 except KeyboardInterrupt:
 
                     llprint("\nSaving Checkpoint ... "),
-                    ncomputer.save(session, ckpts_dir, 'step-%d' % (i))
+                    ncomputer.save(session, ckpts_dir, 'step-%d' % i)
                     llprint("Done!\n")
                     sys.exit(0)

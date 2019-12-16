@@ -8,6 +8,7 @@ from dnc.dnc import DNC
 from dnc.memory import Memory
 from dnc.controller import BaseController
 
+
 class DummyController(BaseController):
     def network_vars(self):
         self.W = tf.Variable(tf.truncated_normal([self.nn_input_size, 64]), name='layer_W')
@@ -15,6 +16,7 @@ class DummyController(BaseController):
 
     def network_op(self, X):
         return tf.matmul(X, self.W) + self.b
+
 
 class DummyRecurrentController(BaseController):
     def network_vars(self):
@@ -33,7 +35,8 @@ class DummyRecurrentController(BaseController):
         )
 
     def get_state(self):
-        return (self.output, self.state)
+        return self.output, self.state
+
 
 class DNCTest(unittest.TestCase):
 
@@ -52,17 +55,14 @@ class DNCTest(unittest.TestCase):
     def setUpClass(cls):
         cls._clear()
 
-
     @classmethod
     def tearDownClass(cls):
         cls._clear()
-
 
     def test_construction(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 1)
                 rcomputer = DNC(DummyRecurrentController, 10, 20, 10, 10, 64, 1)
 
@@ -77,17 +77,15 @@ class DNCTest(unittest.TestCase):
                 self.assertTrue(isinstance(computer.controller, DummyController))
                 self.assertTrue(isinstance(rcomputer.controller, DummyRecurrentController))
 
-
     def test_call(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 2, batch_size=3)
                 rcomputer = DNC(DummyRecurrentController, 10, 20, 10, 10, 64, 2, batch_size=3)
                 input_batches = np.random.uniform(0, 1, (3, 5, 10)).astype(np.float32)
 
-                session.run(tf.initialize_all_variables())
+                session.run(tf.global_variables_initializer())
                 out_view = session.run(computer.get_outputs(), feed_dict={
                     computer.input_data: input_batches,
                     computer.sequence_length: 5
@@ -111,7 +109,6 @@ class DNCTest(unittest.TestCase):
                 self.assertEqual(view['read_weightings'].shape, (3, 5, 10, 2))
                 self.assertEqual(view['write_weightings'].shape, (3, 5, 10))
 
-
                 self.assertEqual(rout.shape, (3, 5, 20))
                 self.assertEqual(rview['free_gates'].shape, (3, 5, 2))
                 self.assertEqual(rview['allocation_gates'].shape, (3, 5, 1))
@@ -119,21 +116,18 @@ class DNCTest(unittest.TestCase):
                 self.assertEqual(rview['read_weightings'].shape, (3, 5, 10, 2))
                 self.assertEqual(rview['write_weightings'].shape, (3, 5, 10))
 
-
     def test_save(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 2, batch_size=2)
-                session.run(tf.initialize_all_variables())
+                session.run(tf.global_variables_initializer())
                 current_dir = os.path.dirname(__file__)
                 ckpts_dir = os.path.join(current_dir, 'checkpoints')
 
                 computer.save(session, ckpts_dir, 'test-save')
 
                 self.assert_(True)
-
 
     def test_restore(self):
 
@@ -147,9 +141,8 @@ class DNCTest(unittest.TestCase):
         graph1 = tf.Graph()
         with graph1.as_default():
             with tf.Session(graph=graph1) as session1:
-
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 2, batch_size=2)
-                session1.run(tf.initialize_all_variables())
+                session1.run(tf.global_variables_initializer())
 
                 saved_weights = session1.run([
                     computer.controller.nn_output_weights,
@@ -164,9 +157,8 @@ class DNCTest(unittest.TestCase):
         graph2 = tf.Graph()
         with graph2.as_default():
             with tf.Session(graph=graph2) as session2:
-
                 computer = DNC(DummyController, 10, 20, 10, 10, 64, 2, batch_size=2)
-                session2.run(tf.initialize_all_variables())
+                session2.run(tf.global_variables_initializer())
                 computer.restore(session2, ckpts_dir, 'test-restore')
 
                 restored_weights = session2.run([
@@ -178,6 +170,7 @@ class DNCTest(unittest.TestCase):
                 ])
 
                 self.assertTrue(np.product([np.array_equal(restored_weights[i], saved_weights[i]) for i in range(5)]))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

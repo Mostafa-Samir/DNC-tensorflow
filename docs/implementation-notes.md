@@ -22,21 +22,23 @@ This operation can be vectorized by instead computing the following formula:
 Where ![](https://latex.codecogs.com/gif.latex?%5Chat%7Bu%7D_t) is the sorted usage vector and ![](https://latex.codecogs.com/gif.latex?%5CPi%5E%7B%5Chat%7Bu%7D%7D_t) is the cumulative product vector of the sorted usage, computed with `tf.cumprod`. With this equation, we get the allocation weighting ![](https://latex.codecogs.com/gif.latex?%5Chat%7Ba%7D_t) out of the original order of the memory locations. We can reorder it into the original order of the memory locations using `TensorArray`'s scatter operation using the free-list as the scatter indices.
 
 ```python
-shifted_cumprod = tf.cumprod(sorted_usage, axis = 1, exclusive=True)
-unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
+def get_allocation_weights(self, sorted_usage, free_list):
+    shifted_cumprod = tf.cumprod(sorted_usage, axis=1, exclusive=True)
+    unordered_allocation_weighting = (1 - sorted_usage) * shifted_cumprod
+    
+    mapped_free_list = free_list + self.index_mapper
+    flat_unordered_allocation_weighting = tf.reshape(unordered_allocation_weighting, (-1,))
+    flat_mapped_free_list = tf.reshape(mapped_free_list, (-1,))
+    flat_container = tf.TensorArray(tf.float32, self.batch_size * self.words_num)
+    
+    flat_ordered_weightings = flat_container.scatter(
+        flat_mapped_free_list,
+        flat_unordered_allocation_weighting
+    )
+    
+    packed_weightings = flat_ordered_weightings.pack()
+    return tf.reshape(packed_weightings, (self.batch_size, self.words_num))
 
-mapped_free_list = free_list + self.index_mapper
-flat_unordered_allocation_weighting = tf.reshape(unordered_allocation_weighting, (-1,))
-flat_mapped_free_list = tf.reshape(mapped_free_list, (-1,))
-flat_container = tf.TensorArray(tf.float32, self.batch_size * self.words_num)
-
-flat_ordered_weightings = flat_container.scatter(
-    flat_mapped_free_list,
-    flat_unordered_allocation_weighting
-)
-
-packed_wightings = flat_ordered_weightings.pack()
-return tf.reshape(packed_wightings, (self.batch_size, self.words_num))
 ```
 
 Because `TensorArray` operations work only on one dimension and our allocation weightings are of shape *batch_size × N*, we map the free-list indices to their values as if they point to consecutive locations in a flat container. Then we flat all the operands and reshape them back to their original 2D shapes at the end. This process is depicted in the following figure.

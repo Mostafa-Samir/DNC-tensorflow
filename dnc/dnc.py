@@ -4,10 +4,11 @@ from memory import Memory
 import utility
 import os
 
+
 class DNC:
 
     def __init__(self, controller_class, input_size, output_size, max_sequence_length,
-                 memory_words_num = 256, memory_word_size = 64, memory_read_heads = 4, batch_size = 1):
+                 memory_words_num=256, memory_word_size=64, memory_read_heads=4, batch_size=1):
         """
         constructs a complete DNC architecture as described in the DNC paper
         http://www.nature.com/nature/journal/vaop/ncurrent/full/nature20101.html
@@ -41,7 +42,8 @@ class DNC:
         self.batch_size = batch_size
 
         self.memory = Memory(self.words_num, self.word_size, self.read_heads, self.batch_size)
-        self.controller = controller_class(self.input_size, self.output_size, self.read_heads, self.word_size, self.batch_size)
+        self.controller = controller_class(self.input_size, self.output_size, self.read_heads, self.word_size,
+                                           self.batch_size)
 
         # input data placeholders
         self.input_data = tf.placeholder(tf.float32, [batch_size, None, input_size], name='input')
@@ -49,7 +51,6 @@ class DNC:
         self.sequence_length = tf.placeholder(tf.int32, name='sequence_length')
 
         self.build_graph()
-
 
     def _step_op(self, step, memory_state, controller_state=None):
         """
@@ -118,7 +119,6 @@ class DNC:
             nn_state[1] if nn_state is not None else tf.zeros(1)
         ]
 
-
     def _loop_body(self, time, memory_state, outputs, free_gates, allocation_gates, write_gates,
                    read_weightings, write_weightings, usage_vectors, controller_state):
         """
@@ -163,11 +163,10 @@ class DNC:
 
         return (
             time + 1, new_memory_state, outputs,
-            free_gates,allocation_gates, write_gates,
+            free_gates, allocation_gates, write_gates,
             read_weightings, write_weightings,
             usage_vectors, new_controller_state
         )
-
 
     def build_graph(self):
         """
@@ -185,7 +184,8 @@ class DNC:
         write_weightings = tf.TensorArray(tf.float32, self.sequence_length)
         usage_vectors = tf.TensorArray(tf.float32, self.sequence_length)
 
-        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else (tf.zeros(1), tf.zeros(1))
+        controller_state = self.controller.get_state() if self.controller.has_recurrent_nn else (tf.zeros(1),
+                                                                                                 tf.zeros(1))
         memory_state = self.memory.init_memory()
         if not isinstance(controller_state, LSTMStateTuple):
             controller_state = LSTMStateTuple(controller_state[0], controller_state[1])
@@ -222,7 +222,6 @@ class DNC:
                 'usage_vectors': utility.pack_into_tensor(final_results[8], axis=1)
             }
 
-
     def get_outputs(self):
         """
         returns the graph nodes for the output and memory view
@@ -233,8 +232,8 @@ class DNC:
         """
         return self.packed_output, self.packed_memory_view
 
-
-    def save(self, session, ckpts_dir, name):
+    @staticmethod
+    def save(session, ckpts_dir, name):
         """
         saves the current values of the model's parameters to a checkpoint
 
@@ -254,8 +253,8 @@ class DNC:
 
         tf.train.Saver(tf.trainable_variables()).save(session, os.path.join(checkpoint_dir, 'model.ckpt'))
 
-
-    def restore(self, session, ckpts_dir, name):
+    @staticmethod
+    def restore(session, ckpts_dir, name):
         """
         session: tf.Session
             the tensorflow session to restore into

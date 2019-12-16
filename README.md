@@ -21,7 +21,7 @@ bAbI experiment and tests ran on an AWS P2 instance on 1 Tesla K80 GPU.
 
 ### Dynamic Memory Mechanisms
 
-This experiment is designed to demonstrate the various functionalities of the external memory access mechanisms such as in-order retrieval and allocation/deallocation.
+This experiment is designed to demonstrate various functions of the external memory access mechanisms such as in-order retrieval and allocation/deallocation.
 
 A similar approach to that of the paper was followed by training a 2-layer feedforward model with only 10 memory locations on a copy task in which a series of 4 random binary sequences each of which is of size 6 (24 piece of information) was presented as input. Details about the training can be found [here](tasks/copy/).
 

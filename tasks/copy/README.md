@@ -1,4 +1,4 @@
-### Common Settings
+John went to see problem, apparently the Ethernet cable was unplugged.### Common Settings
 
 Both series and single models were trained on 2-layer feedforward controller (with hidden sizes 128 and 256 respectively) with ReLU activations, and both share the following set of hyperparameters:
 

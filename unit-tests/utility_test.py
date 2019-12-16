@@ -4,13 +4,13 @@ import unittest
 
 import dnc.utility as util
 
+
 class DNCUtilityTests(unittest.TestCase):
 
     def test_pairwise_add(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 _u = np.array([5, 6])
                 _v = np.array([1, 2])
 
@@ -28,12 +28,10 @@ class DNCUtilityTests(unittest.TestCase):
                 self.assertTrue(np.allclose(U, predicted_U))
                 self.assertTrue(np.allclose(UV, predicted_UV))
 
-
     def test_pairwise_add_with_batch(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 _u = np.array([[5, 6], [7, 8]])
                 _v = np.array([[1, 2], [3, 4]])
 
@@ -51,26 +49,22 @@ class DNCUtilityTests(unittest.TestCase):
                 self.assertTrue(np.allclose(U, predicted_U))
                 self.assertTrue(np.allclose(UV, predicted_UV))
 
-
     def test_unpack_into_tensorarray(self):
-         graph = tf.Graph()
-         with graph.as_default():
-             with tf.Session(graph=graph) as session:
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
+                T = tf.random_normal([5, 10, 7, 7])
+                ta = util.unpack_into_tensorarray(T, axis=1)
 
-                 T = tf.random_normal([5, 10, 7, 7])
-                 ta = util.unpack_into_tensorarray(T, axis=1)
+                vT, vTA5 = session.run([T, ta.read(5)])
 
-                 vT, vTA5 = session.run([T, ta.read(5)])
-
-                 self.assertEqual(vTA5.shape, (5, 7, 7))
-                 self.assertTrue(np.allclose(vT[:, 5, :, :], vTA5))
-
+                self.assertEqual(vTA5.shape, (5, 7, 7))
+                self.assertTrue(np.allclose(vT[:, 5, :, :], vTA5))
 
     def test_pack_into_tensor(self):
-         graph = tf.Graph()
-         with graph.as_default():
-             with tf.Session(graph=graph) as session:
-
+        graph = tf.Graph()
+        with graph.as_default():
+            with tf.Session(graph=graph) as session:
                 T = tf.random_normal([5, 10, 7, 7])
                 ta = util.unpack_into_tensorarray(T, axis=1)
                 pT = util.pack_into_tensor(ta, axis=1)
@@ -78,7 +72,7 @@ class DNCUtilityTests(unittest.TestCase):
                 vT, vPT = session.run([T, pT])
 
                 self.assertEqual(vPT.shape, (5, 10, 7, 7))
-                self.assertTrue(np.allclose(vT, vPT)) 
+                self.assertTrue(np.allclose(vT, vPT))
 
 
 if __name__ == "__main__":

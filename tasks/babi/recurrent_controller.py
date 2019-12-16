@@ -4,9 +4,10 @@ from dnc.controller import BaseController
 
 """
 A 1-layer LSTM recurrent neural network with 256 hidden units
-Note: the state of the LSTM is not saved in a variable becuase we want
-the state to reset to zero on every input sequnece
+Note: the state of the LSTM is not saved in a variable because we want
+the state to reset to zero on every input sequence
 """
+
 
 class RecurrentController(BaseController):
 
@@ -21,5 +22,6 @@ class RecurrentController(BaseController):
     def get_state(self):
         return self.state
 
-    def update_state(self, new_state):
+    @staticmethod
+    def update_state(new_state):
         return tf.no_op()

@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
+
 class BaseController:
 
     def __init__(self, input_size, output_size, memory_read_heads, memory_word_size, batch_size=1):
@@ -15,7 +16,7 @@ class BaseController:
         output_size: int
             the size of the data output vector
         memory_read_heads: int
-            the number of read haeds in the associated external memory
+            the number of read heads in the associated external memory
         memory_word_size: int
             the size of the word in the associated external memory
         batch_size: int
@@ -32,10 +33,10 @@ class BaseController:
         # by the existence of recurrent_update and get_state methods
         has_recurrent_update = callable(getattr(self, 'update_state', None))
         has_get_state = callable(getattr(self, 'get_state', None))
-        self.has_recurrent_nn =  has_recurrent_update and has_get_state
+        self.has_recurrent_nn = has_recurrent_update and has_get_state
 
-        # the actual size of the neural network input after flatenning and
-        # concatenating the input vector with the previously read vctors from memory
+        # the actual size of the neural network input after flattening and
+        # concatenating the input vector with the previously read vectors from memory
         self.nn_input_size = self.word_size * self.read_heads + self.input_size
 
         self.interface_vector_size = self.word_size * self.read_heads + 3 * self.word_size + 5 * self.read_heads + 3
@@ -65,7 +66,7 @@ class BaseController:
             name='nn_output_weights'
         )
         self.mem_output_weights = tf.Variable(
-            tf.random_normal([self.word_size * self.read_heads, self.output_size],  stddev=0.1),
+            tf.random_normal([self.word_size * self.read_heads, self.output_size], stddev=0.1),
             name='mem_output_weights'
         )
 
@@ -76,24 +77,22 @@ class BaseController:
         """
         raise NotImplementedError("network_vars is not implemented")
 
-
     def network_op(self, X):
         """
         defines the controller's internal neural network operation
 
         Parameters:
         ----------
-        X: Tensor (batch_size, word_size * read_haeds + input_size)
+        X: Tensor (batch_size, word_size * read_heads + input_size)
             the input data concatenated with the previously read vectors from memory
 
         Returns: Tensor (batch_size, nn_output_size)
         """
         raise NotImplementedError("network_op method is not implemented")
 
-
     def get_nn_output_size(self):
         """
-        retrives the output size of the defined neural network
+        retrieves the output size of the defined neural network
 
         Returns: int
             the output's size
@@ -101,11 +100,10 @@ class BaseController:
         Raises: ValueError
         """
 
-        input_vector =  np.zeros([self.batch_size, self.nn_input_size], dtype=np.float32)
-        output_vector = None
+        input_vector = np.zeros([self.batch_size, self.nn_input_size], dtype=np.float32)
 
         if self.has_recurrent_nn:
-            output_vector,_ = self.network_op(input_vector, self.get_state())
+            output_vector, _ = self.network_op(input_vector, self.get_state())
         else:
             output_vector = self.network_op(input_vector)
 
@@ -116,16 +114,15 @@ class BaseController:
         else:
             return shape[1]
 
-
     def parse_interface_vector(self, interface_vector):
         """
-        pasres the flat interface_vector into its various components with their
+        parses the flat interface_vector into its various components with their
         correct shapes
 
         Parameters:
         ----------
         interface_vector: Tensor (batch_size, interface_vector_size)
-            the flattened inetrface vector to be parsed
+            the flattened interface vector to be parsed
 
         Returns: dict
             a dictionary with the components of the interface_vector parsed
@@ -207,15 +204,14 @@ class BaseController:
         else:
             return pre_output, parsed_interface
 
-
     def final_output(self, pre_output, new_read_vectors):
         """
-        returns the final output by taking rececnt memory changes into account
+        returns the final output by taking recent memory changes into account
 
         Parameters:
         ----------
         pre_output: Tensor (batch_size, output_size)
-            the ouput vector from the input processing step
+            the output vector from the input processing step
         new_read_vectors: Tensor (batch_size, words_size, read_heads)
             the newly read vectors from the updated memory
 

@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops import gen_state_ops
 
+
 def pairwise_add(u, v=None, is_batch=False):
     """
     performs a pairwise summation between vectors (possibly the same)
@@ -59,6 +60,7 @@ def decaying_softmax(shape, axis):
 
     return container + np.reshape(weights_vector, broadcastable_shape)
 
+
 def unpack_into_tensorarray(value, axis, size=None):
     """
     unpacks a given tensor along a given axis into a TensorArray
@@ -91,6 +93,7 @@ def unpack_into_tensorarray(value, axis, size=None):
 
     return full_array
 
+
 def pack_into_tensor(array, axis):
     """
     packs a given TensorArray into a tensor along a given axis
@@ -110,7 +113,7 @@ def pack_into_tensor(array, axis):
     shape = packed_tensor.get_shape()
     rank = len(shape)
 
-    dim_permutation = [axis] + range(1, axis) + [0]  + range(axis + 1, rank)
+    dim_permutation = [axis] + range(1, axis) + [0] + range(axis + 1, rank)
     correct_shape_tensor = tf.transpose(packed_tensor, dim_permutation)
 
     return correct_shape_tensor

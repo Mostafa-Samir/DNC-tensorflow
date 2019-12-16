@@ -4,7 +4,7 @@
 
 The implementation is structured into three main modules.
 
-- **Memeory** `dnc/memeory.py`: this module implements the memory access and attention mechanisms used in the DNC architecture. This is considered an internal module which a basic user would need to work directly with.
+- **Memory** `dnc/memory.py`: this module implements the memory access and attention mechanisms used in the DNC architecture. This is considered an internal module which a basic user would need to work directly with.
 - **BaseController** `dnc/controller.py`: this module defines an **abstract class** that represents the controller unit in the DNC architecture. The class abstracts away all the common operations between various task (like interface vector parsing, input and read vector concatenation, ... etc) and only leaves for the user two un-implemented methods that concern with defining the internal neural network.
 - **DNC** `dnc/dnc.py`: this module integrates the operations of the controller unit and the memory, and it's considered the public API that the user should interact directly with. This module also abstracts away all the common operations across various tasks (like initiating the memory, looping through the time steps, memory-controller communications, ... etc) so the user is only required to construct an instance of that class using the desired parameters, and use simple API to feed data into the model and get outputs out of it.
 
@@ -31,17 +31,18 @@ The following is an example of controller with a 1-layer feedforward neural netw
 import tensorflow as tf
 from dnc.controller import BaseController
 
-class FeedfrowardController(BaseController):
+
+class FeedforwardController(BaseController):
     def network_vars(self):
         self.W = tf.Variable(tf.truncated_normal([self.nn_input_size, 128]), name='weights')
         self.b = tf.Variable(tf.zeros([128]), name='bias')
-
 
     def network_op(self, X):
         output = tf.matmul(X, self.W) + self.b
         activations = tf.nn.relu(output)
 
         return activations
+
 ```
 
 **Notice** that the network handles works with flat inputs and flat outputs, so if you're planning to do convolutions you should:
@@ -64,6 +65,7 @@ The following is an example of a possible recurrent controller:
 import tensorflow as tf
 from dnc.controller import BaseController
 
+
 class RecurrentController(BaseController):
     def network_vars(self):
         self.lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(64)
@@ -82,6 +84,7 @@ class RecurrentController(BaseController):
 
     def get_state(self):
         return (self.output, self.state)
+
 ```
 
 #### Initial Transformation Weights
@@ -107,6 +110,7 @@ def initials(self):
         tf.random_normal([self.word_size * self.read_heads, self.output_size],  stddev=0.1),
         name='mem_output_weights'
     )
+
 ```
 
 A different initialization scheme can be defined by overwriting this method with the desired scheme. See [the FeedforwardController of the copy task](../tasks/copy/feedforward_controller.py) as an example of different initialization scheme.
@@ -123,11 +127,12 @@ DNC.__init__(
     input_size,
     output_size,
     max_sequence_length,
-    memory_words_num = 256,
-    memory_word_size = 64,
-    memory_read_heads = 4,
-    batch_size = 1
+    memory_words_num=256,
+    memory_word_size=64,
+    memory_read_heads=4,
+    batch_size=1
 )
+
 ```
 * **controller_class**: is a reference to the concrete controller class you defined earlier. You just need to pass the class, you do not need to construct an instance yourself; the `DNC` constructor will automatically handle that.
 * **input_size**: the size of the flatten input vector.
@@ -143,8 +148,9 @@ As you may have noticed, you do not construct an instance of `Memory` directly, 
 To get define the operations leading to the output out of the model, you use the instance method `get_outputs()`:
 ```python
 output_op, memory_view = dnc_instance.get_outputs()
+
 ```
-*`memory_view` is a pyton `dict` that carries some of the internal values of the model (like weightings and gates) that is mainly used for visualization.*
+*`memory_view` is a python `dict` that carries some of the internal values of the model (like weightings and gates) that is mainly used for visualization.*
 
 To actually get the outputs, you need to run this `output_op`, while feeding three placeholders that are attributes of the dnc instance. These placeholders are:
 * **input_data**: a 3D tensor of shape `batch_size X sequence_length X input_size` which represents the inputs of that run.
@@ -153,8 +159,7 @@ To actually get the outputs, you need to run this `output_op`, while feeding thr
 
 So a run for an instantiated DNC model looks like:
 ```python
-input_data = ...
-target_output = ...
+input_data, target_output = generate_data(batch_size, sequence_length, input_size)
 sequence_length = 10
 
 output = dnc_instance.get_outputs()
@@ -165,14 +170,17 @@ loss_val, dnc_output = session.run([loss, output], feed_dict={
     dnc_instance.target_output: target_output,
     dnc_instance.sequence_length: sequence_length
 })
+
 ```
 After you train your model, you can save a check point to disk using the `save` method. This method takes three arguments: the tensorflow session, the path to the checkpoints directory at which the checkpoint will be saved, and the name to be saved with.
 ```python
-dnc_instance.save(session, './checkpoints_dir', 'checkpint-1')
+dnc_instance.save(session, './checkpoints_dir', 'checkpoint-1')
+
 ```
 To restore a previous check point, you can use the `restore` method with the 1st two parameters like in saving and the 3rd one is now the name of the existing checkpoint to be restored.
 ```python
-dnc_instance.restore(session, './checkpoints_dir', 'checkpint-1')
+dnc_instance.restore(session, './checkpoints_dir', 'checkpoint-1')
+
 ```
 #### An Example
 
@@ -180,7 +188,7 @@ The following is an excerpt from the copy task trainer to demonstrate how a `DNC
 ```python
 optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=momentum)
 
-ncomputer = DNC(
+neural_computer = DNC(
     FeedforwardController,
     input_size,
     output_size,
@@ -192,10 +200,10 @@ ncomputer = DNC(
 )
 
 # squash the DNC output between 0 and 1
-output, _ = ncomputer.get_outputs()
+output, _ = neural_computer.get_outputs()
 squashed_output = tf.clip_by_value(tf.sigmoid(output), 1e-6, 1. - 1e-6)
 
-loss = binary_cross_entropy(squashed_output, ncomputer.target_output)
+loss = binary_cross_entropy(squashed_output, neural_computer.target_output)
 
 gradients = optimizer.compute_gradients(loss)
 for i, (grad, var) in enumerate(gradients):
@@ -203,4 +211,5 @@ for i, (grad, var) in enumerate(gradients):
         gradients[i] = (tf.clip_by_value(grad, -10, 10), var)
 
 apply_gradients = optimizer.apply_gradients(gradients)
+
 ```

@@ -4,6 +4,7 @@ import unittest
 
 from dnc.controller import BaseController
 
+
 class DummyController(BaseController):
     def network_vars(self):
         self.W = tf.Variable(tf.truncated_normal([self.nn_input_size, 64]))
@@ -30,7 +31,7 @@ class DummyRecurrentController(BaseController):
         )
 
     def get_state(self):
-        return (self.output, self.state)
+        return self.output, self.state
 
 
 class DNCControllerTest(unittest.TestCase):
@@ -39,7 +40,6 @@ class DNCControllerTest(unittest.TestCase):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 controller = DummyController(10, 10, 2, 5)
                 rcontroller = DummyRecurrentController(10, 10, 2, 5, 1)
 
@@ -57,30 +57,25 @@ class DNCControllerTest(unittest.TestCase):
                 self.assertEqual(rcontroller.nn_output_weights.get_shape().as_list(), [64, 10])
                 self.assertEqual(rcontroller.mem_output_weights.get_shape().as_list(), [10, 10])
 
-
-
     def test_get_nn_output_size(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as Session:
-
                 controller = DummyController(10, 10, 2, 5)
                 rcontroller = DummyRecurrentController(10, 10, 2, 5, 1)
 
                 self.assertEqual(controller.get_nn_output_size(), 64)
                 self.assertEqual(rcontroller.get_nn_output_size(), 64)
 
-
     def test_parse_interface_vector(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 controller = DummyController(10, 10, 2, 5)
                 zeta = np.random.uniform(-2, 2, (2, 38)).astype(np.float32)
 
                 read_keys = np.reshape(zeta[:, :10], (-1, 5, 2))
-                read_strengths = 1 + np.log(np.exp(np.reshape(zeta[:, 10:12], (-1, 2, ))) + 1)
+                read_strengths = 1 + np.log(np.exp(np.reshape(zeta[:, 10:12], (-1, 2,))) + 1)
                 write_key = np.reshape(zeta[:, 12:17], (-1, 5, 1))
                 write_strength = 1 + np.log(np.exp(np.reshape(zeta[:, 17], (-1, 1))) + 1)
                 erase_vector = 1.0 / (1 + np.exp(-1 * np.reshape(zeta[:, 18:23], (-1, 5))))
@@ -97,7 +92,7 @@ class DNCControllerTest(unittest.TestCase):
                 read_modes = np.transpose(read_modes, [0, 2, 1])
 
                 op = controller.parse_interface_vector(zeta)
-                session.run(tf.initialize_all_variables())
+                session.run(tf.global_variables_initializer())
                 parsed = session.run(op)
 
                 self.assertTrue(np.allclose(parsed['read_keys'], read_keys))
@@ -111,12 +106,10 @@ class DNCControllerTest(unittest.TestCase):
                 self.assertTrue(np.allclose(parsed['write_gate'], write_gate))
                 self.assertTrue(np.allclose(parsed['read_modes'], read_modes))
 
-
     def test_process_input(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 controller = DummyController(10, 10, 2, 5)
                 rcontroller = DummyRecurrentController(10, 10, 2, 5, 2)
 
@@ -124,31 +117,32 @@ class DNCControllerTest(unittest.TestCase):
                 last_read_vectors = np.random.uniform(-1, 1, (2, 5, 2)).astype(np.float32)
 
                 v_op, zeta_op = controller.process_input(input_batch, last_read_vectors)
-                rv_op, rzeta_op, rs_op = rcontroller.process_input(input_batch, last_read_vectors, rcontroller.get_state())
+                rv_op, rzeta_op, rs_op = rcontroller.process_input(input_batch, last_read_vectors,
+                                                                   rcontroller.get_state())
 
-                session.run(tf.initialize_all_variables())
+                session.run(tf.global_variables_initializer())
                 v, zeta = session.run([v_op, zeta_op])
                 rv, rzeta, rs = session.run([rv_op, rzeta_op, rs_op])
 
                 self.assertEqual(v.shape, (2, 10))
-                self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in zeta.iteritems()], axis=1).shape, (2, 38))
+                self.assertEqual(
+                    np.concatenate([np.reshape(val, (2, -1)) for _, val in zeta.iteritems()], axis=1).shape, (2, 38))
 
                 self.assertEqual(rv.shape, (2, 10))
-                self.assertEqual(np.concatenate([np.reshape(val, (2, -1)) for _,val in rzeta.iteritems()], axis=1).shape, (2, 38))
+                self.assertEqual(
+                    np.concatenate([np.reshape(val, (2, -1)) for _, val in rzeta.iteritems()], axis=1).shape, (2, 38))
                 self.assertEqual([_s.shape for _s in rs], [(2, 64), (2, 64)])
-
 
     def test_final_output(self):
         graph = tf.Graph()
         with graph.as_default():
             with tf.Session(graph=graph) as session:
-
                 controller = DummyController(10, 10, 2, 5)
                 output_batch = np.random.uniform(0, 1, (2, 10)).astype(np.float32)
                 new_read_vectors = np.random.uniform(-1, 1, (2, 5, 2)).astype(np.float32)
 
                 op = controller.final_output(output_batch, new_read_vectors)
-                session.run(tf.initialize_all_variables())
+                session.run(tf.global_variables_initializer())
                 y = session.run(op)
 
                 self.assertEqual(y.shape, (2, 10))
